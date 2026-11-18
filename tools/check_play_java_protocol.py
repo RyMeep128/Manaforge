@@ -135,6 +135,9 @@ def main():
             PROTOCOL / "java/manaforge/protocol/ViewerChannelExtension.java",
             PROTOCOL / "java-test/MatchCoordinatorChecks.java",
             PROTOCOL / "java-test/ExtensionPlumbingChecks.java",
+            PLAY / "java/BattlefieldIdentityRegistry.java",
+            PLAY / "java/organization-native/NativeOrganizationBridge.java",
+            PROTOCOL / "java-test/MultiplayerOrganizationChecks.java",
         ]
         sources += [
             PROTOCOL / "java/manaforge/protocol/OrganizationMessages.java",
@@ -394,6 +397,12 @@ def main():
             ],
             check=True,
             timeout=120,
+        )
+
+        subprocess.run(
+            [runtime, "-cp", str(workspace) + os.pathsep + str(jar), "MultiplayerOrganizationChecks"],
+            check=True,
+            timeout=60,
         )
 
         subprocess.run(

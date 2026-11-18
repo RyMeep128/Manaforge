@@ -455,6 +455,8 @@ class MultiplayerPanel(W.QWidget):
                     version=APP_VERSION,
                     launch=launch,
                     payment_mode=modes[0],
+                    organization_drawers=True,
+                    organization_free_placement=True,
                 )
             return run_host_game(
                 setup,

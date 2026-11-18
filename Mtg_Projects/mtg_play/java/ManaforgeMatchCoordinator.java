@@ -156,7 +156,8 @@ public final class ManaforgeMatchCoordinator implements AutoCloseable {
             if(channel.incoming.incrementAndGet()>32){channel.incoming.decrementAndGet();disconnect(channel,connection,"EXTENSION_INPUT_OVERFLOW");return;}
             try{owner.execute(()->{try{
                 if(stopping.get())return;synchronized(channel){if(channel.connection!=connection || !connection.active)return;}
-                if(gameplay!=null)gameplay.receive(channel.viewer.seat,incoming);else extension.receive(channel.viewer.seat,incoming);
+                boolean organization=channel.extensionAllowed && WireEnvelope.parseObject(incoming).get("message_type").getAsString().startsWith("organization_");
+                if(organization)extension.receive(channel.viewer.seat,incoming);else if(gameplay!=null)gameplay.receive(channel.viewer.seat,incoming);else extension.receive(channel.viewer.seat,incoming);
             }catch(Exception failure){disconnect(channel,connection,"EXTENSION_REJECTED");}finally{channel.incoming.decrementAndGet();}});}
             catch(RejectedExecutionException failure){channel.incoming.decrementAndGet();disconnect(channel,connection,"OWNER_CLOSED");return;}
         }}catch(IOException failure){disconnect(channel,connection,"PEER_CLOSED");}

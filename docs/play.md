@@ -38,6 +38,11 @@ need no engine process or port forwarding. XMage remains the rules authority.
 Guests receive only their own projected private information. The host and relay
 operator are trusted with engine and transported data, respectively.
 
+Players can drag their own face-up battlefield cards into free positions and
+organize them into drawers. The host shares these layouts with both clients,
+including while the other player has priority. Layout changes do not change
+XMage game state or reveal private cards.
+
 A lost game connection interrupts the session rather than assigning a winner.
 Reconnect and host migration are not implemented. Closing Unity after a normal
 result retains that result; use Leave Lobby to set up the next game.

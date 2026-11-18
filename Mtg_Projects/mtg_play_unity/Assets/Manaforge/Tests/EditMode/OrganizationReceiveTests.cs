@@ -58,6 +58,20 @@ namespace Manaforge.Play.Tests
             var receipt=Envelope("receipt",new JObject{["match_epoch"]="match",["command_id"]=command["body"]["command_id"],["outcome"]="applied",["organization_revision"]=1,["basis_revision"]=7,["reason_code"]=JValue.CreateNull()});session.Receive(receipt.ToString());Assert.That(await pending,Is.True);Assert.That(session.ForRevision(8).Groups.Single().Objects.Single(),Is.EqualTo("rotated"));Assert.That(session.ForRevision(7),Is.Null);
             Assert.Throws<WireEnvelope.EnvelopeException>(()=>session.Receive(receipt.ToString()));Assert.That(await session.Submit(frame,operation),Is.False);session.Dispose();Assert.That(session.ForRevision(8),Is.Null);
         }
+        [TestCase(3),TestCase(4)] public void OtherPlayersCanRefreshTheBasisWithoutAdvancingThisViewersGameplay(int version)
+        {
+            using var session=new ClientOrganizationSession("viewer-a",_=>{});session.ConfigureVersion(version);
+            var caps=JObject.Parse(Caps());caps["organization_version"]=version;caps["body"]["versions"]=new JArray(version);session.Receive(caps.ToString());
+            var first=Snapshot(7);first["organization_version"]=version;first["body"]["seats"][0]["groups"][0]["presentation_mode"]="panel";
+            if(version==4)foreach(JObject seat in first["body"]["seats"])seat["placements"]=new JArray();
+            session.Receive(first.ToString());var newer=(JObject)first.DeepClone();newer["body"]["basis_revision"]=8;
+            session.Receive(newer.ToString());session.ObserveGameplay(Game(7));Assert.That(session.ForRevision(7).Basis,Is.EqualTo(8));
+            var latest=(JObject)newer.DeepClone();latest["body"]["basis_revision"]=9;session.Receive(latest.ToString());
+            Assert.That(session.ForRevision(7).Basis,Is.EqualTo(9));Assert.That(session.ForRevision(7).Revision,Is.EqualTo(1));
+            session.Receive(first.ToString());Assert.That(session.ForRevision(7).Basis,Is.EqualTo(9));
+            var conflicting=(JObject)latest.DeepClone();conflicting["body"]["seats"][0]["groups"][0]["name"]="Conflicting state";
+            Assert.Throws<WireEnvelope.EnvelopeException>(()=>session.Receive(conflicting.ToString()));
+        }
         [Test] public void NewestFutureSnapshotWinsAndDisposalCannotResurrectIt()
         {
             using var session=new ClientOrganizationSession("viewer-a",_=>{});session.Receive(Caps());session.Receive(Snapshot(8,2,"eight").ToString());session.Receive(Snapshot(7,3,"seven").ToString());session.ObserveGameplay(Game(8,"eight"));Assert.That(session.ForRevision(8).Revision,Is.EqualTo(2));session.Dispose();session.ObserveGameplay(Game(9));Assert.That(session.ForRevision(9),Is.Null);

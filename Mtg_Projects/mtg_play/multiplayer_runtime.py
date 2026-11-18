@@ -262,6 +262,7 @@ def run_host_game(
                     "engine_version": "1.4.62-V1",
                     "artifact_manifest_sha256": pin,
                     "viewer_key_hex": keys[1].hex(),
+                    "organization_version": 4,
                 },
                 remote["port"],
             )
@@ -277,6 +278,7 @@ def run_host_game(
                     artifact_manifest_sha256=pin,
                     viewer_key=keys[0],
                     format=setup.format,
+                    organization_version=4,
                     artwork_directory=artwork.directory,
                     artwork_manifest_sha256=artwork.pin,
                 ),
@@ -338,6 +340,7 @@ def run_guest_game(
             artifact_manifest_sha256=prepare["artifact_manifest_sha256"],
             viewer_key=bytes.fromhex(prepare["viewer_key_hex"]),
             format=prepare["format"],
+            organization_version=prepare.get("organization_version"),
             artwork_directory=artwork.directory,
             artwork_manifest_sha256=artwork.pin,
         )

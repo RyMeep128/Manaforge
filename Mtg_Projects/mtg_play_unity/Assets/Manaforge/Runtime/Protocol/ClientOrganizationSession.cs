@@ -41,7 +41,10 @@ namespace Manaforge.Play.Protocol
                 if(type!="organization_snapshot" || (string)body["viewer_id"]!=viewer)throw new WireEnvelope.EnvelopeException("ORGANIZATION_CONTEXT");
                 string match=(string)body["match_epoch"];if(epoch!=null && epoch!=match)throw new WireEnvelope.EnvelopeException("ORGANIZATION_EPOCH");epoch=match;
                 long revision=(long)body["gameplay_revision"];
-                if(game==null || revision>(long)game["revision"]){if(future!=null && revision==(long)future["gameplay_revision"] && (long)body["organization_revision"]==(long)future["organization_revision"] && !JToken.DeepEquals(body,future))throw new WireEnvelope.EnvelopeException("ORGANIZATION_CONFLICT");if(future==null || revision>(long)future["gameplay_revision"] || revision==(long)future["gameplay_revision"] && (long)body["organization_revision"]>(long)future["organization_revision"])future=(JObject)body.DeepClone();return null;}
+                if(game==null || revision>(long)game["revision"]){
+                    if(future!=null && revision==(long)future["gameplay_revision"] && (long)body["organization_revision"]==(long)future["organization_revision"] && (long)body["basis_revision"]==(long)future["basis_revision"] && !JToken.DeepEquals(body,future))throw new WireEnvelope.EnvelopeException("ORGANIZATION_CONFLICT");
+                    if(future==null || revision>(long)future["gameplay_revision"] || revision==(long)future["gameplay_revision"] && ((long)body["organization_revision"]>(long)future["organization_revision"] || (long)body["organization_revision"]==(long)future["organization_revision"] && (long)body["basis_revision"]>(long)future["basis_revision"]))future=(JObject)body.DeepClone();return null;
+                }
                 Admit(body);return null;
             }
         }
@@ -49,7 +52,10 @@ namespace Manaforge.Play.Protocol
         {
             if(game==null || (long)body["gameplay_revision"]!=(long)game["revision"] || (string)game["status"]!="active")return;
             if(current!=null && (long)body["organization_revision"]<current.Revision)return;
-            if(currentBody!=null && (long)body["organization_revision"]==current.Revision){if(!JToken.DeepEquals(body,currentBody))throw new WireEnvelope.EnvelopeException("ORGANIZATION_CONFLICT");return;}
+            if(currentBody!=null && (long)body["organization_revision"]==current.Revision){
+                if((long)body["basis_revision"]<current.Basis)return;
+                if((long)body["basis_revision"]==current.Basis){if(!JToken.DeepEquals(body,currentBody))throw new WireEnvelope.EnvelopeException("ORGANIZATION_CONFLICT");return;}
+            }
             var admitted=game["objects"].Where(o=>(string)o["zone"]=="battlefield" && (bool?)o["hidden"]==false && (bool?)o["face_down"]==false).ToDictionary(o=>(string)o["object_id"],o=>(string)o["controller_id"],StringComparer.Ordinal);
             var objects=new Dictionary<string,string>();var seats=new Dictionary<string,string>();foreach(var mapping in body["mappings"]){string handle=(string)mapping["handle"],reference=(string)mapping["object_reference"],seat=(string)mapping["seat_id"];if(!admitted.TryGetValue(reference,out var owner) || owner!=seat)throw new WireEnvelope.EnvelopeException("ORGANIZATION_CONTEXT");objects.Add(handle,reference);seats.Add(handle,seat);}
             var context=new OrganizationMessages.Context(epoch,viewer,(long)body["basis_revision"],objects,seats,admitted.Keys,game["players"].Select(p=>(string)p["player_id"]));

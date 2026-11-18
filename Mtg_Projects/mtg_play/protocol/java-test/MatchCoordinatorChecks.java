@@ -84,21 +84,23 @@ public final class MatchCoordinatorChecks {
             rejects(()->coordinator.publishSnapshots(batch(template,a,b,99,false)),"PUBLISH_AFTER_CLOSE");
         }
         check(disposed.get()==1,"MATCH_DISPOSED_TWICE");
-        AtomicInteger authenticated=new AtomicInteger();AtomicReference<String> routed=new AtomicReference<>();AtomicBoolean disconnected=new AtomicBoolean();
+        AtomicInteger authenticated=new AtomicInteger(),organizationInputs=new AtomicInteger();AtomicReference<String> routed=new AtomicReference<>();AtomicBoolean disconnected=new AtomicBoolean();
         try(ManaforgeMatchCoordinator coordinator=new ManaforgeMatchCoordinator("interactive-game",ENGINE,HASH,()->{},()->false,10000,300,true)){
             coordinator.installGameplay(new ManaforgeMatchCoordinator.Gameplay(){
                 public void connected(String seat,GatewayHandshake.ViewerContext context){check(context.viewerId.equals("viewer-"+seat),"GAMEPLAY_AUTH_CONTEXT");authenticated.incrementAndGet();}
                 public void receive(String seat,String wire){routed.set(seat+":"+wire);}
                 public void disconnected(String seat){disconnected.set(true);}
             });
-            ManaforgeMatchCoordinator.Viewer a=coordinator.register("a","native-a","session-a","viewer-a",keyA),b=coordinator.register("b","native-b","session-b","viewer-b",keyB);coordinator.start();
+            coordinator.installExtension(sender->new ViewerChannelExtension(){public void connected(String seat){}public void receive(String seat,String raw){organizationInputs.incrementAndGet();}public void disconnected(String seat){}public void close(){}});
+            ManaforgeMatchCoordinator.Viewer a=coordinator.register("a","native-a","session-a","viewer-a",keyA,true),b=coordinator.register("b","native-b","session-b","viewer-b",keyB,true);coordinator.start();
             try(Client ca=new Client(a,keyA,true);Client cb=new Client(b,keyB,true)){
                 await(()->authenticated.get()==2,"GAMEPLAY_AUTHENTICATED");
                 coordinator.sendGameplay("a",snapshot(template,a,1,false));coordinator.sendGameplay("b",snapshot(template,b,1,false));
                 check(ca.read().getAsJsonObject("body").getAsJsonObject("snapshot").get("viewer_id").getAsString().equals("viewer-a") && cb.read().getAsJsonObject("body").getAsJsonObject("snapshot").get("viewer_id").getAsString().equals("viewer-b"),"GAMEPLAY_PRIVATE_PUBLICATION");
                 rejects(()->coordinator.sendGameplay("a",snapshot(template,b,2,false)),"GAMEPLAY_CROSS_VIEWER_PUBLICATION");
                 rejects(()->coordinator.sendGameplay("a",snapshot(template,a,1,false)),"GAMEPLAY_STALE_REVISION");
-                ca.send("seat-private-input");await(()->"a:seat-private-input".equals(routed.get()),"GAMEPLAY_ROUTING");
+                String input="{\"wire_version\":1,\"message_type\":\"command\",\"message_id\":\"routed\",\"body\":{}}";ca.send(input);await(()->("a:"+input).equals(routed.get()),"GAMEPLAY_ROUTING");
+                ca.send("{\"wire_version\":1,\"organization_version\":4,\"message_type\":\"organization_capabilities\",\"message_id\":\"cap\",\"body\":{\"versions\":[4]}}");await(()->organizationInputs.get()==1,"ORGANIZATION_ROUTING");check(("a:"+input).equals(routed.get()),"ORGANIZATION_REACHED_RULES_QUEUE");
                 JsonObject ack=new JsonObject(),body=new JsonObject();ack.addProperty("wire_version",1);ack.addProperty("message_type","ack");ack.addProperty("message_id","receipt");
                 body.addProperty("session_id",a.session);body.addProperty("viewer_id",a.viewer);body.addProperty("command_id","command");body.addProperty("request_revision",1);body.addProperty("outcome","submitted");body.add("code",JsonNull.INSTANCE);ack.add("body",body);
                 coordinator.sendGameplay("a",ack);check(WireMessages.parse(TextFrame.read(ca.socket.getInputStream())).getAsJsonObject("body").get("outcome").getAsString().equals("submitted"),"GAMEPLAY_RECEIPT_WITHOUT_SNAPSHOT");
