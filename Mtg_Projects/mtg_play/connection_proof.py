@@ -393,42 +393,23 @@ def run_proof(
         with diagnostics.stage("bridge_compilation"):
             classes = workspace / "classes"
             classes.mkdir()
-            classpath = str(server / "lib/*")
-            if payment_context_probe:
-                classpath += os.pathsep + str(
-                    server / "plugins/mage-player-human-1.4.62.jar"
+            classpath = os.pathsep.join(
+                (
+                    str(server / "lib/*"),
+                    str(server / "plugins/mage-player-human-1.4.62.jar"),
                 )
+            )
             packaged_classes = bridge_classes(bundle)
             if packaged_classes is not None:
                 shutil.copytree(packaged_classes, classes, dirs_exist_ok=True)
             else:
-                context_sources = []
-                if payment_context_probe:
-                    context_sources.append(
-                        HERE
-                        / "java/payment-xmage/manaforge/payment/xmage/ContextHumanPlayer.java"
-                    )
-                    context_sources.append(
-                        HERE
-                        / "java/payment-xmage/manaforge/payment/xmage/OrdinaryManaShape.java"
-                    )
-                    context_sources.append(
-                        HERE
-                        / "java/payment-xmage/manaforge/payment/xmage/OrdinaryCostCoverage.java"
-                    )
-                    context_sources.append(
-                        HERE
-                        / "java/payment-xmage/manaforge/payment/xmage/NativePaymentHazards.java"
-                    )
-                if payment_context_probe:
-                    context_sources.extend(
-                        [
-                            HERE
-                            / "java/payment-xmage/manaforge/payment/xmage/NativePaymentSearch.java",
-                            HERE
-                            / "java/payment-xmage/manaforge/payment/xmage/PaymentSimulationPlayer.java",
-                        ]
-                    )
+                # All gateway entrypoints compile together. Display-cost metadata also
+                # uses native payment helpers when the runtime payment probe is off.
+                context_sources = sorted(
+                    source
+                    for source in (HERE / "java/payment-xmage").rglob("*.java")
+                    if source.name != "ManaResponseExecutor.java"
+                )
                 compile_log = (workspace / "compile.log").open("w", encoding="utf-8")
                 logs.append(compile_log)
                 command = [

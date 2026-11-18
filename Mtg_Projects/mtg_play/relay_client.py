@@ -1,4 +1,5 @@
 """WSS relay and bounded loopback tunnel; never interprets gameplay state."""
+
 import base64
 import json
 import queue
@@ -26,27 +27,39 @@ class RelayClient(C.QObject):
         self.socket = QWebSocket(parent=self)
         self.socket.setMaxAllowedIncomingFrameSize(MAX_RELAY)
         self.socket.setMaxAllowedIncomingMessageSize(MAX_RELAY)
-        self.socket.connected.connect(lambda: self.send({"op": "create" if hosting else "join"}))
+        self.socket.connected.connect(
+            lambda: self.send({"op": "create" if hosting else "join"})
+        )
         self.socket.textMessageReceived.connect(self._receive)
-        self.socket.binaryMessageReceived.connect(lambda _: self.fail("RELAY_INVALID_MESSAGE"))
+        self.socket.binaryMessageReceived.connect(
+            lambda _: self.fail("RELAY_INVALID_MESSAGE")
+        )
         self.socket.disconnected.connect(lambda: self.fail("RELAY_DISCONNECTED"))
-        self.socket.errorOccurred.connect(lambda _: self.fail("RELAY_CONNECTION_FAILED"))
+        self.socket.errorOccurred.connect(
+            lambda _: self.fail("RELAY_CONNECTION_FAILED")
+        )
         self.socket.sslErrors.connect(lambda _: self.fail("RELAY_CERTIFICATE_FAILED"))
         self.outgoing.connect(self.send, C.Qt.ConnectionType.QueuedConnection)
-        self.timeout = C.QTimer(self); self.timeout.setSingleShot(True)
+        self.timeout = C.QTimer(self)
+        self.timeout.setSingleShot(True)
         self.timeout.timeout.connect(lambda: self.fail("RELAY_TIMEOUT"))
 
     def open(self):
         self.timeout.start(10000)
-        self.socket.open(C.QUrl(self.endpoint + "/v1/socket?" + urlencode({"room": self.code})))
+        self.socket.open(
+            C.QUrl(self.endpoint + "/v1/socket?" + urlencode({"room": self.code}))
+        )
 
     @C.pyqtSlot(object)
     def send(self, message):
         if self.closed:
             return
-        raw = json.dumps({"relay_version": 1, **message}, ensure_ascii=True, separators=(",", ":"))
+        raw = json.dumps(
+            {"relay_version": 1, **message}, ensure_ascii=True, separators=(",", ":")
+        )
         if len(raw.encode()) > MAX_RELAY or self.socket.bytesToWrite() > 2 * MAX_RELAY:
-            self.fail("RELAY_QUEUE_FULL"); return
+            self.fail("RELAY_QUEUE_FULL")
+            return
         self.socket.sendTextMessage(raw)
 
     def payload(self, value):
@@ -63,7 +76,13 @@ class RelayClient(C.QObject):
                 self.timeout.stop()
             if message.get("op") in ("error", "closed"):
                 code = message.get("code", "RELAY_FAILED")
-                self.fail(code if isinstance(code, str) and len(code) < 80 and code.replace("_", "").isupper() else "RELAY_FAILED")
+                self.fail(
+                    code
+                    if isinstance(code, str)
+                    and len(code) < 80
+                    and code.replace("_", "").isupper()
+                    else "RELAY_FAILED"
+                )
                 return
             self.event.emit(message)
         except (ValueError, TypeError):
@@ -71,26 +90,37 @@ class RelayClient(C.QObject):
 
     def fail(self, code):
         if not self.closed:
-            self.close(); self.failed.emit(code)
+            self.close()
+            self.failed.emit(code)
 
     def close(self):
-        self.closed = True; self.timeout.stop(); self.socket.abort()
+        self.closed = True
+        self.timeout.stop()
+        self.socket.abort()
 
 
 class LoopbackTunnel:
     """One TCP channel, one reader and writer, ordered bounded relay frames."""
+
     def __init__(self, send, failed, *, target_port=None):
         self.send, self.failed, self.target = send, failed, target_port
         self.inbound = queue.Queue(maxsize=8)
-        self.cancel = threading.Event(); self.socket = None; self.listener = None
+        self.cancel = threading.Event()
+        self.socket = None
+        self.listener = None
         self.completed = False
         self.sent_bytes = self.received_bytes = 0
         if target_port is None:
-            self.listener = socket.socket(); self.listener.bind(("127.0.0.1", 0)); self.listener.listen(1); self.listener.settimeout(.2)
+            self.listener = socket.socket()
+            self.listener.bind(("127.0.0.1", 0))
+            self.listener.listen(1)
+            self.listener.settimeout(0.2)
             self.port = self.listener.getsockname()[1]
         else:
             self.port = target_port
-        self.thread = threading.Thread(target=self._run, daemon=True, name="manaforge-relay-tunnel")
+        self.thread = threading.Thread(
+            target=self._run, daemon=True, name="manaforge-relay-tunnel"
+        )
         self.thread.start()
 
     def feed(self, payload):
@@ -105,7 +135,8 @@ class LoopbackTunnel:
             self.received_bytes += len(raw)
             self.inbound.put_nowait(raw)
         except (ValueError, queue.Full):
-            self.failed("TUNNEL_INVALID_FRAME"); self.close()
+            self.failed("TUNNEL_INVALID_FRAME")
+            self.close()
 
     def _exact(self, count):
         data = bytearray()
@@ -123,27 +154,36 @@ class LoopbackTunnel:
             if self.target is None:
                 while not self.cancel.is_set():
                     try:
-                        self.socket, _ = self.listener.accept(); break
+                        self.socket, _ = self.listener.accept()
+                        break
                     except socket.timeout:
                         continue
                 if self.socket is None:
                     return
                 self.send({"type": "tunnel_open"})
             else:
-                self.socket = socket.create_connection(("127.0.0.1", self.target), timeout=5)
+                self.socket = socket.create_connection(
+                    ("127.0.0.1", self.target), timeout=5
+                )
             self.socket.settimeout(30)
-            writer = threading.Thread(target=self._write, daemon=True, name="manaforge-relay-writer"); writer.start()
+            writer = threading.Thread(
+                target=self._write, daemon=True, name="manaforge-relay-writer"
+            )
+            writer.start()
             while not self.cancel.is_set():
                 # Idle does not expire a turn; partial frames do.
                 self.socket.settimeout(None)
-                first = self._exact(1); self.socket.settimeout(10)
+                first = self._exact(1)
+                self.socket.settimeout(10)
                 length = struct.unpack(">I", first + self._exact(3))[0]
                 if not 1 <= length <= MAX_FRAME:
                     raise ValueError()
                 raw = self._exact(length)
                 self._observe_terminal(raw)
                 self.sent_bytes += len(raw)
-                self.send({"type": "frame", "data": base64.b64encode(raw).decode("ascii")})
+                self.send(
+                    {"type": "frame", "data": base64.b64encode(raw).decode("ascii")}
+                )
         except (OSError, ValueError):
             if not self.cancel.is_set() and not self.completed:
                 self.failed("GAME_INTERRUPTED")
@@ -154,7 +194,7 @@ class LoopbackTunnel:
         try:
             while not self.cancel.is_set():
                 try:
-                    raw = self.inbound.get(timeout=.2)
+                    raw = self.inbound.get(timeout=0.2)
                 except queue.Empty:
                     continue
                 self.socket.sendall(struct.pack(">I", len(raw)) + raw)

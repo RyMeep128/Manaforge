@@ -378,11 +378,21 @@ def run_live_game(
     """Blocking worker with one private manifest and one viewer bootstrap; no per-action Python."""
     if xmage_root is None:
         from .engine_fork import selected_bundle
-        xmage_root = selected_bundle(transport.HERE / "mage-full_1.4.62-dev_2026-10-03_20-47")
+
+        xmage_root = selected_bundle(
+            transport.HERE / "mage-full_1.4.62-dev_2026-10-03_20-47"
+        )
     if type(organization) is not bool:
         raise LiveGameError("UNITY_GAME_ORGANIZATION_INVALID")
-    organization_enabled = organization or organization_drawers or organization_free_placement or SHARED_ORGANIZATION_ENABLED
-    organization_version = 4 if organization_free_placement else 3 if organization_drawers else 2
+    organization_enabled = (
+        organization
+        or organization_drawers
+        or organization_free_placement
+        or SHARED_ORGANIZATION_ENABLED
+    )
+    organization_version = (
+        4 if organization_free_placement else 3 if organization_drawers else 2
+    )
     if (
         commander_scenario
         not in (
@@ -597,7 +607,11 @@ def run_live_game(
                 dict(
                     live_opening_bootstrap_version=1,
                     viewer_key_hex=key.hex(),
-                    **({"organization_version": organization_version} if organization_enabled else {}),
+                    **(
+                        {"organization_version": organization_version}
+                        if organization_enabled
+                        else {}
+                    ),
                 )
             ).encode()
             gateway.stdin.write(len(secret).to_bytes(4, "big") + secret)
@@ -659,7 +673,9 @@ def run_live_game(
                 cwd=str(player.parent),
                 viewer_bootstrap=export_viewer_bootstrap(
                     format=manifest["format"],
-                    organization_version=organization_version if organization_enabled else None,
+                    organization_version=organization_version
+                    if organization_enabled
+                    else None,
                     port=address["port"],
                     session_id=manifest["manifest_id"],
                     viewer_id=human["seat_id"],

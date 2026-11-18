@@ -71,7 +71,9 @@
                     "merged_components"
                   ],
                   "base_power": null,
-                  "base_toughness": null
+                  "base_toughness": null,
+                  "mana_cost": null,
+                  "casting_cost": null
                 },
                 "card_identity": null,
                 "tapped": null,
@@ -258,7 +260,9 @@
                     "merged_components"
                   ],
                   "base_power": null,
-                  "base_toughness": null
+                  "base_toughness": null,
+                  "mana_cost": null,
+                  "casting_cost": null
                 },
                 "card_identity": null,
                 "tapped": null,
@@ -391,7 +395,9 @@
                     "merged_components"
                   ],
                   "base_power": null,
-                  "base_toughness": null
+                  "base_toughness": null,
+                  "mana_cost": null,
+                  "casting_cost": null
                 },
                 "card_identity": null,
                 "tapped": null,
@@ -550,7 +556,9 @@
                     "merged_components"
                   ],
                   "base_power": null,
-                  "base_toughness": null
+                  "base_toughness": null,
+                  "mana_cost": null,
+                  "casting_cost": null
                 },
                 "card_identity": null,
                 "tapped": null,
@@ -692,7 +700,9 @@
                     "merged_components"
                   ],
                   "base_power": null,
-                  "base_toughness": null
+                  "base_toughness": null,
+                  "mana_cost": null,
+                  "casting_cost": null
                 },
                 "card_identity": null,
                 "tapped": null,
@@ -797,7 +807,9 @@
                     "merged_components"
                   ],
                   "base_power": null,
-                  "base_toughness": null
+                  "base_toughness": null,
+                  "mana_cost": null,
+                  "casting_cost": null
                 },
                 "card_identity": null,
                 "tapped": null,
@@ -936,7 +948,9 @@
                     "merged_components"
                   ],
                   "base_power": null,
-                  "base_toughness": null
+                  "base_toughness": null,
+                  "mana_cost": null,
+                  "casting_cost": null
                 },
                 "card_identity": null,
                 "tapped": null,
@@ -1088,7 +1102,9 @@
                     "merged_components"
                   ],
                   "base_power": null,
-                  "base_toughness": null
+                  "base_toughness": null,
+                  "mana_cost": null,
+                  "casting_cost": null
                 },
                 "card_identity": null,
                 "tapped": null,
@@ -1251,7 +1267,9 @@
                     "merged_components"
                   ],
                   "base_power": null,
-                  "base_toughness": null
+                  "base_toughness": null,
+                  "mana_cost": null,
+                  "casting_cost": null
                 },
                 "card_identity": null,
                 "tapped": null,
@@ -1390,7 +1408,9 @@
                     "merged_components"
                   ],
                   "base_power": null,
-                  "base_toughness": null
+                  "base_toughness": null,
+                  "mana_cost": null,
+                  "casting_cost": null
                 },
                 "card_identity": null,
                 "tapped": null,
@@ -1495,7 +1515,9 @@
                     "merged_components"
                   ],
                   "base_power": null,
-                  "base_toughness": null
+                  "base_toughness": null,
+                  "mana_cost": null,
+                  "casting_cost": null
                 },
                 "card_identity": null,
                 "tapped": null,
@@ -1601,7 +1623,9 @@
                     "merged_components"
                   ],
                   "base_power": null,
-                  "base_toughness": null
+                  "base_toughness": null,
+                  "mana_cost": null,
+                  "casting_cost": null
                 },
                 "card_identity": null,
                 "tapped": null,
@@ -1708,7 +1732,9 @@
                     "merged_components"
                   ],
                   "base_power": null,
-                  "base_toughness": null
+                  "base_toughness": null,
+                  "mana_cost": null,
+                  "casting_cost": null
                 },
                 "card_identity": null,
                 "tapped": null,
@@ -1814,7 +1840,9 @@
                     "merged_components"
                   ],
                   "base_power": null,
-                  "base_toughness": null
+                  "base_toughness": null,
+                  "mana_cost": null,
+                  "casting_cost": null
                 },
                 "card_identity": null,
                 "tapped": null,
@@ -1920,7 +1948,9 @@
                     "merged_components"
                   ],
                   "base_power": null,
-                  "base_toughness": null
+                  "base_toughness": null,
+                  "mana_cost": null,
+                  "casting_cost": null
                 },
                 "card_identity": null,
                 "tapped": null,
@@ -2032,7 +2062,9 @@
                     "merged_components"
                   ],
                   "base_power": null,
-                  "base_toughness": null
+                  "base_toughness": null,
+                  "mana_cost": null,
+                  "casting_cost": null
                 },
                 "card_identity": null,
                 "tapped": null,
@@ -2138,7 +2170,9 @@
                     "merged_components"
                   ],
                   "base_power": null,
-                  "base_toughness": null
+                  "base_toughness": null,
+                  "mana_cost": null,
+                  "casting_cost": null
                 },
                 "card_identity": null,
                 "tapped": null,
@@ -2497,7 +2531,9 @@
                     "merged_components"
                   ],
                   "base_power": null,
-                  "base_toughness": null
+                  "base_toughness": null,
+                  "mana_cost": null,
+                  "casting_cost": null
                 },
                 "card_identity": null,
                 "tapped": null,
@@ -2603,7 +2639,9 @@
                     "merged_components"
                   ],
                   "base_power": null,
-                  "base_toughness": null
+                  "base_toughness": null,
+                  "mana_cost": null,
+                  "casting_cost": null
                 },
                 "card_identity": null,
                 "tapped": null,
@@ -2709,7 +2747,9 @@
                     "merged_components"
                   ],
                   "base_power": null,
-                  "base_toughness": null
+                  "base_toughness": null,
+                  "mana_cost": null,
+                  "casting_cost": null
                 },
                 "card_identity": null,
                 "tapped": null,
@@ -2815,7 +2855,9 @@
                     "merged_components"
                   ],
                   "base_power": null,
-                  "base_toughness": null
+                  "base_toughness": null,
+                  "mana_cost": null,
+                  "casting_cost": null
                 },
                 "card_identity": null,
                 "tapped": null,
@@ -2921,7 +2963,9 @@
                     "merged_components"
                   ],
                   "base_power": null,
-                  "base_toughness": null
+                  "base_toughness": null,
+                  "mana_cost": null,
+                  "casting_cost": null
                 },
                 "card_identity": null,
                 "tapped": null,
@@ -3028,7 +3072,9 @@
                     "merged_components"
                   ],
                   "base_power": null,
-                  "base_toughness": null
+                  "base_toughness": null,
+                  "mana_cost": null,
+                  "casting_cost": null
                 },
                 "card_identity": null,
                 "tapped": null,
@@ -3070,7 +3116,9 @@
                     "merged_components"
                   ],
                   "base_power": null,
-                  "base_toughness": null
+                  "base_toughness": null,
+                  "mana_cost": null,
+                  "casting_cost": null
                 },
                 "card_identity": null,
                 "tapped": null,
@@ -3176,7 +3224,9 @@
                     "merged_components"
                   ],
                   "base_power": null,
-                  "base_toughness": null
+                  "base_toughness": null,
+                  "mana_cost": null,
+                  "casting_cost": null
                 },
                 "card_identity": null,
                 "tapped": null,
@@ -3310,7 +3360,9 @@
                     "merged_components"
                   ],
                   "base_power": null,
-                  "base_toughness": null
+                  "base_toughness": null,
+                  "mana_cost": null,
+                  "casting_cost": null
                 },
                 "card_identity": null,
                 "tapped": null,
@@ -3416,7 +3468,9 @@
                     "merged_components"
                   ],
                   "base_power": null,
-                  "base_toughness": null
+                  "base_toughness": null,
+                  "mana_cost": null,
+                  "casting_cost": null
                 },
                 "card_identity": null,
                 "tapped": null,
@@ -3522,7 +3576,9 @@
                     "merged_components"
                   ],
                   "base_power": null,
-                  "base_toughness": null
+                  "base_toughness": null,
+                  "mana_cost": null,
+                  "casting_cost": null
                 },
                 "card_identity": null,
                 "tapped": null,
@@ -3704,7 +3760,9 @@
                     "merged_components"
                   ],
                   "base_power": null,
-                  "base_toughness": null
+                  "base_toughness": null,
+                  "mana_cost": null,
+                  "casting_cost": null
                 },
                 "card_identity": null,
                 "tapped": null,
@@ -3810,7 +3868,9 @@
                     "merged_components"
                   ],
                   "base_power": null,
-                  "base_toughness": null
+                  "base_toughness": null,
+                  "mana_cost": null,
+                  "casting_cost": null
                 },
                 "card_identity": null,
                 "tapped": null,
@@ -3944,7 +4004,9 @@
                     "merged_components"
                   ],
                   "base_power": null,
-                  "base_toughness": null
+                  "base_toughness": null,
+                  "mana_cost": null,
+                  "casting_cost": null
                 },
                 "card_identity": null,
                 "tapped": null,
@@ -4071,7 +4133,9 @@
                     "merged_components"
                   ],
                   "base_power": null,
-                  "base_toughness": null
+                  "base_toughness": null,
+                  "mana_cost": null,
+                  "casting_cost": null
                 },
                 "card_identity": null,
                 "tapped": null,
@@ -4113,7 +4177,9 @@
                     "merged_components"
                   ],
                   "base_power": null,
-                  "base_toughness": null
+                  "base_toughness": null,
+                  "mana_cost": null,
+                  "casting_cost": null
                 },
                 "card_identity": null,
                 "tapped": null,
@@ -4302,7 +4368,9 @@
                     "merged_components"
                   ],
                   "base_power": null,
-                  "base_toughness": null
+                  "base_toughness": null,
+                  "mana_cost": null,
+                  "casting_cost": null
                 },
                 "card_identity": null,
                 "tapped": null,
@@ -4408,7 +4476,9 @@
                     "merged_components"
                   ],
                   "base_power": null,
-                  "base_toughness": null
+                  "base_toughness": null,
+                  "mana_cost": null,
+                  "casting_cost": null
                 },
                 "card_identity": null,
                 "tapped": null,
@@ -4548,7 +4618,9 @@
                     "merged_components"
                   ],
                   "base_power": null,
-                  "base_toughness": null
+                  "base_toughness": null,
+                  "mana_cost": null,
+                  "casting_cost": null
                 },
                 "card_identity": null,
                 "tapped": null,
@@ -4688,7 +4760,9 @@
                     "merged_components"
                   ],
                   "base_power": null,
-                  "base_toughness": null
+                  "base_toughness": null,
+                  "mana_cost": null,
+                  "casting_cost": null
                 },
                 "card_identity": null,
                 "tapped": null,
@@ -4852,7 +4926,9 @@
                     "merged_components"
                   ],
                   "base_power": null,
-                  "base_toughness": null
+                  "base_toughness": null,
+                  "mana_cost": null,
+                  "casting_cost": null
                 },
                 "card_identity": null,
                 "tapped": null,
@@ -5016,7 +5092,9 @@
                     "merged_components"
                   ],
                   "base_power": null,
-                  "base_toughness": null
+                  "base_toughness": null,
+                  "mana_cost": null,
+                  "casting_cost": null
                 },
                 "card_identity": null,
                 "tapped": null,
@@ -5155,7 +5233,9 @@
                     "merged_components"
                   ],
                   "base_power": null,
-                  "base_toughness": null
+                  "base_toughness": null,
+                  "mana_cost": null,
+                  "casting_cost": null
                 },
                 "card_identity": null,
                 "tapped": null,

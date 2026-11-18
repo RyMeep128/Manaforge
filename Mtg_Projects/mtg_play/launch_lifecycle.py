@@ -10,13 +10,19 @@ import subprocess
 import threading
 import time
 
-from .connection_proof import stop_process
 from .viewer_bootstrap import ViewerBootstrapError, frame_viewer_bootstrap
 from .gateway_bootstrap import (
     GatewayBootstrapError,
     frame_gateway_manifest,
     manifest_validation_receipt,
 )
+
+
+def stop_process(*args, **kwargs):
+    # Keep lifecycle/bootstrap imports usable without Core, Qt, or an engine install.
+    from .connection_proof import stop_process as stop_owned_process
+
+    return stop_owned_process(*args, **kwargs)
 
 
 class LaunchState(StrEnum):

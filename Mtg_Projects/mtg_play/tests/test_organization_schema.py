@@ -34,8 +34,38 @@ def test_organization_schema_corpus(schema, case):
     assert valid == case["schema_valid"]
 
 
-@pytest.mark.parametrize("members,x,valid", [(["h1"], 250000, True), ([], 0, False), (["h1", "h2"], 0, False), (["h1"], -1, False), (["h1"], 1000001, False)])
+@pytest.mark.parametrize(
+    "members,x,valid",
+    [
+        (["h1"], 250000, True),
+        ([], 0, False),
+        (["h1", "h2"], 0, False),
+        (["h1"], -1, False),
+        (["h1"], 1000001, False),
+    ],
+)
 def test_v4_free_placement_is_bounded_and_single_member(members, x, valid):
     schema = json.loads((PROTOCOL / "organization-v4.schema.json").read_text())
-    packet = {"wire_version": 1, "organization_version": 4, "message_type": "organization_command", "message_id": "place", "body": {"match_epoch": "match", "command_id": "place", "expected_organization_revision": 0, "basis_revision": 1, "operation": {"kind": "place", "group_id": None, "name": None, "x": x, "y": 500000, "index": None, "members": members, "presentation_mode": None}}}
+    packet = {
+        "wire_version": 1,
+        "organization_version": 4,
+        "message_type": "organization_command",
+        "message_id": "place",
+        "body": {
+            "match_epoch": "match",
+            "command_id": "place",
+            "expected_organization_revision": 0,
+            "basis_revision": 1,
+            "operation": {
+                "kind": "place",
+                "group_id": None,
+                "name": None,
+                "x": x,
+                "y": 500000,
+                "index": None,
+                "members": members,
+                "presentation_mode": None,
+            },
+        },
+    }
     assert jsonschema.Draft202012Validator(schema).is_valid(packet) is valid

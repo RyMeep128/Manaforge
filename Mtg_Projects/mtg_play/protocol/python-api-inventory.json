@@ -228,6 +228,18 @@
         "python_default": "None"
       },
       {
+        "name": "mana_cost",
+        "python_type": "str | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "casting_cost",
+        "python_type": "str | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
         "name": "unsupported_fields",
         "python_type": "tuple[str, ...]",
         "required": false,
@@ -459,6 +471,12 @@
       {
         "name": "default",
         "python_type": "int | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "object_id",
+        "python_type": "str | None",
         "required": false,
         "python_default": "None"
       }
@@ -1044,6 +1062,7 @@
       "UNITY_GAME_ENDED_WITHOUT_RESULT",
       "UNITY_GAME_ENGINE_FAILED",
       "UNITY_GAME_FILES_CLEANUP_FAILED",
+      "UNITY_GAME_ORGANIZATION_INVALID",
       "UNITY_GAME_PLAYER_EXIT_TIMEOUT",
       "UNITY_GAME_PLAYER_FAILED",
       "UNITY_GAME_READY_INVALID",

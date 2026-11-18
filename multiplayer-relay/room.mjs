@@ -47,6 +47,8 @@ export class Room {
     if (peer.role && this.peers.get(peer.id) !== peer) return;
     if (peer.role) this.peers.delete(peer.id);
     try { peer.socket.close(1000, 'Room connection closed'); } catch {}
+    // Rejected/unadmitted sockets never own a seat and cannot interrupt a match.
+    if (!peer.role) return;
     const host = this.peers.get('host');
     if (peer.role === 'host' || host?.started) {
       for (const other of [...this.peers.values()]) { this.peers.delete(other.id); try { this.send(other, { op: 'closed', code: 'GAME_INTERRUPTED' }); } catch {} try { other.socket.close(1000); } catch {} }

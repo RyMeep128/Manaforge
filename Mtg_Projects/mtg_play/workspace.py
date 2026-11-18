@@ -62,7 +62,9 @@ class PlayWorkspace(W.QWidget):
         self.player_count.setAccessibleName("Player count")
         self.player_count.addItem("2 players", 2)
         for count in range(3, 6):
-            self.player_count.addItem(f"{count} players — coming after 1v1 validation", count)
+            self.player_count.addItem(
+                f"{count} players — coming after 1v1 validation", count
+            )
             self.player_count.model().item(count - 2).setEnabled(False)
         form.addRow("Players", self.player_count)
         self.mode = W.QComboBox()
@@ -179,7 +181,10 @@ class PlayWorkspace(W.QWidget):
         self.player_count.setEnabled(not busy)
         self.mode.setEnabled(not busy)
         self.unity_payment_mode.setEnabled(not busy)
-        if hasattr(self, "multiplayer") and self._multiplayer_format != self.format.currentData():
+        if (
+            hasattr(self, "multiplayer")
+            and self._multiplayer_format != self.format.currentData()
+        ):
             self.multiplayer.reset()
             self._multiplayer_format = self.format.currentData()
         lobby = replace(self.lobby, format=self.format.currentData())

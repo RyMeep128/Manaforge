@@ -2,7 +2,15 @@
   "name": "manaforge-multiplayer-relay",
   "private": true,
   "type": "module",
-  "scripts": { "start": "node server.mjs", "test": "node --test", "deploy": "wrangler deploy" },
-  "dependencies": { "ws": "8.18.3" },
-  "devDependencies": { "wrangler": "4.50.0" }
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "ws": "8.23.0"
+  },
+  "devDependencies": {
+    "wrangler": "4.164.0"
+  }
 }

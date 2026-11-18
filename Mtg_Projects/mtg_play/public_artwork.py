@@ -90,11 +90,21 @@ class PublicArtworkServer:
             )
             if card:
                 requested = request.get("name")
-                names = {card.get("name")} | {face.get("name") for face in card.get("card_faces") or [] if isinstance(face, dict)}
+                names = {card.get("name")} | {
+                    face.get("name")
+                    for face in card.get("card_faces") or []
+                    if isinstance(face, dict)
+                }
                 if requested not in names:
-                    card = self._meld_result(card, requested) if isinstance(requested, str) and requested else None
+                    card = (
+                        self._meld_result(card, requested)
+                        if isinstance(requested, str) and requested
+                        else None
+                    )
                 if card and card.get("id") and card.get("oracle_id"):
-                    return dict(oracle_id=card["oracle_id"], printing_id=card["id"]), b""
+                    return dict(
+                        oracle_id=card["oracle_id"], printing_id=card["id"]
+                    ), b""
             return dict(unavailable=True), b""
         if request.get("action") == "resolve_token":
             card = self.resolve_token(request)
@@ -114,8 +124,12 @@ class PublicArtworkServer:
             return dict(unavailable=True), b""
         face_name = request.get("face_name")
         transformed = request.get("transformed")
-        if (face_name is not None and (not isinstance(face_name, str) or len(face_name) > 1024)
-                or transformed is not None and type(transformed) is not bool):
+        if (
+            face_name is not None
+            and (not isinstance(face_name, str) or len(face_name) > 1024)
+            or transformed is not None
+            and type(transformed) is not bool
+        ):
             return dict(unavailable=True), b""
         card = self.service.get_card(card_id=printing) or {}
         if card.get("id") != printing or card.get("oracle_id") != oracle:
@@ -125,24 +139,45 @@ class PublicArtworkServer:
             return dict(unavailable=True), b""
         # A meld result is an explicit catalog relationship of the admitted
         # printing, never a same-name search or an arbitrary replacement image.
-        image_card = self._meld_result(card, face_name) if layout == "meld" and face_name != card.get("name") else card
+        image_card = (
+            self._meld_result(card, face_name)
+            if layout == "meld" and face_name != card.get("name")
+            else card
+        )
         if not image_card:
             return dict(unavailable=True), b""
         faces = image_card.get("card_faces") or []
-        if not isinstance(faces, list) or len(faces) > 8 or any(not isinstance(face, dict) for face in faces):
+        if (
+            not isinstance(faces, list)
+            or len(faces) > 8
+            or any(not isinstance(face, dict) for face in faces)
+        ):
             return dict(unavailable=True), b""
-        if layout in ("transform", "modal_dfc", "double_faced_token", "reversible_card") and len(faces) != 2:
+        if (
+            layout
+            in ("transform", "modal_dfc", "double_faced_token", "reversible_card")
+            and len(faces) != 2
+        ):
             return dict(unavailable=True), b""
-        matches = [index for index, face in enumerate(faces) if face.get("name") == face_name]
+        matches = [
+            index for index, face in enumerate(faces) if face.get("name") == face_name
+        ]
         if len(matches) > 1:
             return dict(unavailable=True), b""
         index = matches[0] if matches else 0
-        if transformed is True and layout in ("transform", "modal_dfc", "double_faced_token", "reversible_card"):
+        if transformed is True and layout in (
+            "transform",
+            "modal_dfc",
+            "double_faced_token",
+            "reversible_card",
+        ):
             index = 1
         face = faces[index] if faces else image_card
         # Split, Adventure and flip cards use one printed image; true DFCs
         # require an independently cached/downloaded face and never fall back.
-        separate = bool(faces) and not bool(image_card.get("image_uris")) and layout != "flip"
+        separate = (
+            bool(faces) and not bool(image_card.get("image_uris")) and layout != "flip"
+        )
         if separate and not face.get("image_uris"):
             return dict(unavailable=True), b""
         if not (face.get("type_line") or image_card.get("type_line")):
@@ -153,24 +188,46 @@ class PublicArtworkServer:
         if cache_key in self.pixels:
             header, pixels = self.pixels.pop(cache_key)
             self.pixels[cache_key] = (header, pixels)
-            return (header, pixels) if header["oracle_id"] == oracle else (dict(unavailable=True), b"")
-        path = self.service.get_image_path(image_printing) if variant == "default" else self.service.get_image_path(image_printing, variant=variant)
+            return (
+                (header, pixels)
+                if header["oracle_id"] == oracle
+                else (dict(unavailable=True), b"")
+            )
+        path = (
+            self.service.get_image_path(image_printing)
+            if variant == "default"
+            else self.service.get_image_path(image_printing, variant=variant)
+        )
         if not path:
             if separate and index:
-                path = self.service.ensure_face_image(image_printing, index, allow_remote=True)
+                path = self.service.ensure_face_image(
+                    image_printing, index, allow_remote=True
+                )
             else:
                 path = self.service.ensure_image(image_printing, allow_remote=True)
-        converted = cached_rgba(path, 896, rotation=180 if layout == "flip" and index else 0) if path else None
+        converted = (
+            cached_rgba(path, 896, rotation=180 if layout == "flip" and index else 0)
+            if path
+            else None
+        )
         if not converted:
             return dict(unavailable=True), b""
         width, height, pixels = converted
         header = dict(
             oracle_id=oracle,
             printing_id=printing,
-            face_key=oracle + ":" + ("front" if index == 0 and image_printing == printing else "face-" + str(index) + ":" + image_printing),
+            face_key=oracle
+            + ":"
+            + (
+                "front"
+                if index == 0 and image_printing == printing
+                else "face-" + str(index) + ":" + image_printing
+            ),
             standard_compatible=_standard(card) and image_printing == printing,
             layout=card["layout"],
-            printed_type_line=face.get("type_line") or image_card.get("type_line") or "",
+            printed_type_line=face.get("type_line")
+            or image_card.get("type_line")
+            or "",
             printed_name=face.get("name"),
             printed_rules=face.get("oracle_text"),
             printed_mana_cost=face.get("mana_cost"),
@@ -191,15 +248,28 @@ class PublicArtworkServer:
     def _meld_result(self, card, name):
         if not name or name == card.get("name"):
             return card
-        candidates = [part for part in card.get("all_parts") or []
-                      if isinstance(part, dict) and part.get("component") == "meld_result" and part.get("name") == name]
+        candidates = [
+            part
+            for part in card.get("all_parts") or []
+            if isinstance(part, dict)
+            and part.get("component") == "meld_result"
+            and part.get("name") == name
+        ]
         if len(candidates) != 1:
             return None
         result = self.service.get_card(card_id=candidates[0].get("id")) or {}
         if not result and hasattr(self.service, "fetch_missing_card"):
             result = self.service.fetch_missing_card(card_id=candidates[0]["id"]) or {}
-        return result if (result.get("id") == candidates[0].get("id") and result.get("name") == name
-                          and result.get("layout") == "meld" and result.get("oracle_id")) else None
+        return (
+            result
+            if (
+                result.get("id") == candidates[0].get("id")
+                and result.get("name") == name
+                and result.get("layout") == "meld"
+                and result.get("oracle_id")
+            )
+            else None
+        )
 
     def resolve_token(self, request):
         name = str(request.get("name") or "").removesuffix(" Token")

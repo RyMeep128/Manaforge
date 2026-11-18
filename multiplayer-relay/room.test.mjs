@@ -35,6 +35,8 @@ test('hibernation restores routing and started admission lock', () => {
   room = new Room([host, guest]); guest.messages = [];
   send(room, host, 'send', { payload: 'still private' }); assert.equal(guest.messages[0].payload, 'still private');
   const third = makePeer(); send(room, third, 'join'); assert.equal(third.closed, true);
+  assert.equal(host.closed, false); assert.equal(guest.closed, false);
+  assert.equal(room.peers.size, 2);
 });
 test('expiry, invalid frames and slow consumers fail closed', () => {
   let now = 1000; const room = new Room([], () => now), host = makePeer(), guest = makePeer();
