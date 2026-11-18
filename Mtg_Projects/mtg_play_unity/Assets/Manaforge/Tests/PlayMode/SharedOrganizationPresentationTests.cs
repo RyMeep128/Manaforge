@@ -50,6 +50,45 @@ namespace Manaforge.Play.Tests
         private static void Submit(VisualElement target)
         {Assert.That(target,Is.Not.Null);using(var ev=NavigationSubmitEvent.GetPooled()){ev.target=target;target.SendEvent(ev);}}
         private static Task Reply(View view,JObject message)=>Task.Run(()=>view.Peer.ReplyForFixture(message));
+        private static void AssertNormalizedPosition(View view,VisualElement element,float x,float y)
+        {
+            var table=view.Root.Q("arena-table");
+            Assert.That(element.style.left.value.value/Mathf.Max(1,table.resolvedStyle.width-element.style.width.value.value),Is.EqualTo(x).Within(.001f));
+            Assert.That(element.style.top.value.value/Mathf.Max(1,table.resolvedStyle.height-element.style.height.value.value),Is.EqualTo(y).Within(.001f));
+        }
+        [UnityTest] public IEnumerator SharedPositionsFaceEachViewerAcrossTheTable()
+        {
+            using var a=new View("one","a-object",1280,720,version:4);using var b=new View("two","b-object",1366,768,version:4);
+            Action tick=()=>{a.Tick();b.Tick();};yield return Until(()=>a.Host.HasPresentedRevision(1) && b.Host.HasPresentedRevision(1),tick);
+            CardView own=null,opposing=null;
+            a.Arena.Surface.VisitPresented((card,view)=>{if(card.ObjectId==a.Reference)own=view;});
+            b.Arena.Surface.VisitPresented((card,view)=>{if(card.ObjectId==b.Reference)opposing=view;});
+            var cap=Envelope("capabilities",new JObject{["versions"]=new JArray(4)},4);
+            var sent=Task.WhenAll(Reply(a,cap),Reply(b,cap));yield return Until(()=>sent.IsCompleted,tick);sent.GetAwaiter().GetResult();
+            var capA=Task.Run(()=>a.Peer.ReadCommandForFixture());var capB=Task.Run(()=>b.Peer.ReadCommandForFixture());
+            yield return Until(()=>capA.IsCompleted && capB.IsCompleted,tick);capA.GetAwaiter().GetResult();capB.GetAwaiter().GetResult();
+            var av=Snapshot("one","a-object",version:4,grouped:false);var bv=Snapshot("two","b-object",version:4,grouped:false);
+            foreach(var value in new[]{av,bv}){
+                string viewer=(string)value["body"]["viewer_id"];
+                value["body"]["seats"][0]["placements"]=new JArray(new JObject{["handle"]="handle-"+viewer,["x"]=250000,["y"]=720000});
+            }
+            sent=Task.WhenAll(Reply(a,av),Reply(b,bv));yield return Until(()=>a.Host.OrganizationFor(1)?.Revision==0 && b.Host.OrganizationFor(1)?.Revision==0,tick);
+            yield return null;tick();yield return null;
+            AssertNormalizedPosition(a,own,.25f,.72f);AssertNormalizedPosition(b,opposing,.75f,.28f);
+            Assert.That(own.style.rotate.value.angle.value,Is.Zero);Assert.That(opposing.style.rotate.value.angle.value,Is.Zero,"Perspective changes positions, never card text");
+            b.Root.style.width=1920;b.Root.style.height=1080;yield return null;tick();yield return null;
+            AssertNormalizedPosition(b,opposing,.75f,.28f);
+            long revision=0;
+            foreach(string mode in new[]{"panel","drawer"}){
+                revision++;av=Snapshot("one","a-object",revision:revision,version:4,mode:mode);bv=Snapshot("two","b-object",revision:revision,version:4,mode:mode);
+                foreach(var value in new[]{av,bv}){value["body"]["seats"][0]["groups"][0]["x"]=250000;value["body"]["seats"][0]["groups"][0]["y"]=720000;}
+                sent=Task.WhenAll(Reply(a,av),Reply(b,bv));yield return Until(()=>a.Host.OrganizationFor(1)?.Revision==revision && b.Host.OrganizationFor(1)?.Revision==revision,tick);
+                yield return null;tick();yield return null;
+                AssertNormalizedPosition(a,a.Root.Q("organization-group-g"),.25f,.72f);AssertNormalizedPosition(b,b.Root.Q("organization-group-g"),.75f,.28f);
+                Assert.That(b.Root.Q<Button>("organization-edit-g").style.display.value,Is.EqualTo(DisplayStyle.None));
+            }
+            Assert.That(a.Peer.PendingCommandBytes,Is.Zero);Assert.That(b.Peer.PendingCommandBytes,Is.Zero,"Mirroring cannot submit gameplay or layout commands");
+        }
         [UnityTest] public IEnumerator TwoAuthenticatedViewsRenderSharedEditsAndKeepViewsSurfaceOwned()
         {
             using var a=new View("one","a-object",1280,720);using var b=new View("two","b-object",1280,720);Action tick=()=>{a.Tick();b.Tick();};yield return Until(()=>a.Host.HasPresentedRevision(1) && b.Host.HasPresentedRevision(1),tick);

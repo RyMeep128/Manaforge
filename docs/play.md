@@ -42,6 +42,8 @@ Players can drag their own face-up battlefield cards into free positions and
 organize them into drawers. The host shares these layouts with both clients,
 including while the other player has priority. Layout changes do not change
 XMage game state or reveal private cards.
+Shared card and group positions are relative to their controlling player: the
+opponent sees those positions across the table with card text kept upright.
 
 A lost game connection interrupts the session rather than assigning a winner.
 Reconnect and host migration are not implemented. Closing Unity after a normal
