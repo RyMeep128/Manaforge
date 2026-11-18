@@ -238,9 +238,9 @@ public final class OpeningSessionChecks {
             try{byte[] key=ManaforgeUnityOpening.readBootstrap(new java.io.ByteArrayInputStream(out.toByteArray()));if(!bootstrap.startsWith("{\"live_opening_bootstrap_version\":1,\"viewer_key_hex\":\""))throw new AssertionError("BAD_BOOTSTRAP_ACCEPTED");if(key.length!=32 || key[0]!=(byte)0xaa)throw new AssertionError("BAD_KEY");java.util.Arrays.fill(key,(byte)0);}
             catch(IOException failure){if(bootstrap.startsWith("{\"live_opening_bootstrap_version\":1,\"viewer_key_hex\":\""))throw failure;if(!failure.getMessage().equals("LIVE_OPENING_BOOTSTRAP_FAILED"))throw failure;}
         }
-        for(int version:new int[]{2,1,3}){
+        for(int version:new int[]{2,3,4,1,5}){
             String raw="{\"live_opening_bootstrap_version\":1,\"viewer_key_hex\":\""+keyText+"\",\"organization_version\":"+version+"}";java.io.ByteArrayOutputStream out=new java.io.ByteArrayOutputStream();manaforge.protocol.TextFrame.write(out,raw);
-            try{byte[] secret=ManaforgeUnityOpening.readBootstrap(new java.io.ByteArrayInputStream(out.toByteArray()));java.util.Arrays.fill(secret,(byte)0);if(version!=2 || !ManaforgeUnityOpening.organizationAllowed())throw new AssertionError("ORGANIZATION_BOOTSTRAP");}catch(IOException invalid){if(version==2)throw invalid;}
+            try{byte[] secret=ManaforgeUnityOpening.readBootstrap(new java.io.ByteArrayInputStream(out.toByteArray()));java.util.Arrays.fill(secret,(byte)0);if(version<2 || version>4 || !ManaforgeUnityOpening.organizationAllowed() || ManaforgeUnityOpening.organizationVersion()!=version)throw new AssertionError("ORGANIZATION_BOOTSTRAP");}catch(IOException invalid){if(version>=2 && version<=4)throw invalid;if(ManaforgeUnityOpening.organizationAllowed())throw new AssertionError("INVALID_ORGANIZATION_BOOTSTRAP_RETAINED");}
         }
         AtomicInteger calls=new AtomicInteger();String hash=String.join("",java.util.Collections.nCopies(64,"0"));
         ManaforgeOpeningProjection projection=OpeningProjectionChecks.projection();

@@ -75,11 +75,6 @@ def export_artwork_bundle(
             not selected
             or selected.printing_id != printing
             or selected.oracle_id != payload["oracle_id"]
-            or (
-                not preview_only
-                and not allow_single_face
-                and not selected.standard_compatible
-            )
             or not payload.get("type_line")
         ):
             unavailable.append(
@@ -89,6 +84,15 @@ def export_artwork_bundle(
         pixels = cached_rgba(selected.local_path, max_edge) if selected.cached else None
         if pixels is None:
             unavailable.append(dict(printing_id=printing, code="ARTWORK_MISSING"))
+            continue
+        if (
+            not preview_only
+            and not allow_single_face
+            and not selected.standard_compatible
+        ):
+            unavailable.append(
+                dict(printing_id=printing, code="ARTWORK_FACE_UNSUPPORTED")
+            )
             continue
         width, height, raw = pixels
         digest = hashlib.sha256(raw).hexdigest()
