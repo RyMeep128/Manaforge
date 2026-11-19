@@ -58,6 +58,10 @@ Leave Lobby also remains available after an interrupted connection. Engine failu
 from either seat are retained in the host's session diagnostics, including only
 safe exception types and adapter locations. Client logs record the original receive
 or protocol stop code so shutdown interruptions do not hide the first failure.
+The local relay tunnel buffers ordered update bursts up to 128 frames and 8 MiB,
+including an in-flight write. Exceeding either limit interrupts the connection
+with a retained transport error; frames are never silently discarded. A game that
+ends without a result closes the room so the other client and host can clean up.
 
 The shared relay uses Workers Free and hibernating SQLite-backed Durable Objects.
 Free quotas are account-wide limits, not unlimited capacity. See the

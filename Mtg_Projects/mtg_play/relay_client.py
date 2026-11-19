@@ -13,6 +13,8 @@ from .multiplayer import relay_url
 
 MAX_FRAME = 1048576
 MAX_RELAY = 1500000
+MAX_TUNNEL_FRAMES = 128
+MAX_TUNNEL_BYTES = 8 * MAX_FRAME
 
 
 class RelayClient(C.QObject):
@@ -104,7 +106,10 @@ class LoopbackTunnel:
 
     def __init__(self, send, failed, *, target_port=None):
         self.send, self.failed, self.target = send, failed, target_port
-        self.inbound = queue.Queue(maxsize=8)
+        self.inbound = queue.Queue(maxsize=MAX_TUNNEL_FRAMES)
+        self.inbound_lock = threading.Lock()
+        self.queued_bytes = 0
+        self.failure_code = None
         self.cancel = threading.Event()
         self.socket = None
         self.listener = None
@@ -131,11 +136,40 @@ class LoopbackTunnel:
             raw = base64.b64decode(data, validate=True)
             if not 1 <= len(raw) <= MAX_FRAME:
                 raise ValueError()
+            with self.inbound_lock:
+                if self.cancel.is_set():
+                    return
+                if self.queued_bytes + len(raw) > MAX_TUNNEL_BYTES:
+                    raise queue.Full()
+                self.inbound.put_nowait(raw)
+                self.queued_bytes += len(raw)
+                self.received_bytes += len(raw)
             self._observe_terminal(raw)
-            self.received_bytes += len(raw)
-            self.inbound.put_nowait(raw)
-        except (ValueError, queue.Full):
-            self.failed("TUNNEL_INVALID_FRAME")
+        except queue.Full:
+            self._fail("TUNNEL_INPUT_OVERFLOW")
+        except (ValueError, TypeError, AttributeError):
+            self._fail("TUNNEL_INVALID_FRAME")
+
+    def _fail(self, code):
+        with self.inbound_lock:
+            if self.cancel.is_set() or self.failure_code is not None:
+                return
+            self.failure_code = code
+            queued_bytes = self.queued_bytes
+        try:
+            from mtg_core.diagnostics import get_logger
+
+            get_logger(__name__).warning(
+                "Multiplayer tunnel stopped code=%s queued_frames=%s queued_bytes=%s",
+                code,
+                self.inbound.qsize(),
+                queued_bytes,
+            )
+        except Exception:
+            pass  # Diagnostic storage must not prevent closing a failed transport.
+        try:
+            self.failed(code)
+        finally:
             self.close()
 
     def _exact(self, count):
@@ -187,7 +221,7 @@ class LoopbackTunnel:
                 )
         except (OSError, ValueError):
             if not self.cancel.is_set() and not self.completed:
-                self.failed("GAME_INTERRUPTED")
+                self._fail("GAME_INTERRUPTED")
         finally:
             self.close()
 
@@ -198,10 +232,16 @@ class LoopbackTunnel:
                     raw = self.inbound.get(timeout=0.2)
                 except queue.Empty:
                     continue
-                self.socket.sendall(struct.pack(">I", len(raw)) + raw)
+                try:
+                    if not self.cancel.is_set():
+                        self.socket.sendall(struct.pack(">I", len(raw)) + raw)
+                finally:
+                    with self.inbound_lock:
+                        self.queued_bytes -= len(raw)
+                    self.inbound.task_done()
         except OSError:
             if not self.cancel.is_set() and not self.completed:
-                self.failed("GAME_INTERRUPTED")
+                self._fail("GAME_INTERRUPTED")
             self.close()
 
     def _observe_terminal(self, raw):
@@ -213,6 +253,14 @@ class LoopbackTunnel:
 
     def close(self):
         self.cancel.set()
+        with self.inbound_lock:
+            while True:
+                try:
+                    raw = self.inbound.get_nowait()
+                except queue.Empty:
+                    break
+                self.queued_bytes -= len(raw)
+                self.inbound.task_done()
         for sock in (self.socket, self.listener):
             if sock:
                 try:

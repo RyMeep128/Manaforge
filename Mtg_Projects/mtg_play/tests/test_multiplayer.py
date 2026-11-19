@@ -132,6 +132,92 @@ def test_host_observes_shared_failure_from_either_seat(tmp_path, code):
         _raise_game_error(seat)
 
 
+def test_tunnel_keeps_an_update_burst_ordered_while_socket_writer_is_paused(
+    monkeypatch,
+):
+    import base64
+    import threading
+    from mtg_play.relay_client import LoopbackTunnel
+
+    monkeypatch.setattr(LoopbackTunnel, "_run", lambda self: None)
+    errors = []
+    tunnel = LoopbackTunnel(lambda _: None, errors.append, target_port=1)
+    entered, release = threading.Event(), threading.Event()
+    progress = threading.Condition()
+    sent = []
+
+    class PausedSocket:
+        def sendall(self, packet):
+            with progress:
+                sent.append(packet[4:])
+                progress.notify_all()
+            if len(sent) == 1:
+                entered.set()
+                if not release.wait(8):
+                    raise OSError("Fixture socket was not released")
+
+        def shutdown(self, _):
+            release.set()
+
+        def close(self):
+            release.set()
+
+    tunnel.socket = PausedSocket()
+    payloads = [f"update-{i}".encode() for i in range(64)]
+
+    def feed(raw):
+        tunnel.feed({"data": base64.b64encode(raw).decode()})
+
+    feed(payloads[0])
+    writer = threading.Thread(target=tunnel._write, daemon=True)
+    writer.start()
+    try:
+        assert entered.wait(3)
+        for payload in payloads[1:]:
+            feed(payload)
+        assert errors == []
+        assert not tunnel.cancel.is_set()
+        release.set()
+        with progress:
+            assert progress.wait_for(lambda: len(sent) == len(payloads), timeout=5)
+        assert sent == payloads
+    finally:
+        release.set()
+        tunnel.close()
+        writer.join(3)
+        tunnel.thread.join(3)
+    assert not writer.is_alive()
+    assert tunnel.queued_bytes == 0
+
+
+@pytest.mark.parametrize("byte_limit", [False, True])
+def test_tunnel_queue_remains_bounded_and_preserves_the_first_failure(
+    monkeypatch, byte_limit
+):
+    import base64
+    from mtg_play.relay_client import LoopbackTunnel, MAX_FRAME, MAX_TUNNEL_FRAMES
+
+    monkeypatch.setattr(LoopbackTunnel, "_run", lambda self: None)
+    errors = []
+    tunnel = LoopbackTunnel(lambda _: None, errors.append, target_port=1)
+    try:
+        raw = b"x" * (MAX_FRAME if byte_limit else 1)
+        payload = {"data": base64.b64encode(raw).decode()}
+        for _ in range(8 if byte_limit else MAX_TUNNEL_FRAMES):
+            tunnel.feed(payload)
+        assert errors == []
+        tunnel.feed(payload)
+        assert errors == ["TUNNEL_INPUT_OVERFLOW"]
+        assert tunnel.failure_code == "TUNNEL_INPUT_OVERFLOW"
+        assert tunnel.cancel.is_set()
+        assert tunnel.inbound.empty() and tunnel.queued_bytes == 0
+        tunnel.feed({"data": "invalid base64"})
+        assert errors == ["TUNNEL_INPUT_OVERFLOW"]
+    finally:
+        tunnel.close()
+        tunnel.thread.join(3)
+
+
 def test_tunnel_preserves_action_and_receipt_order_with_unbuffered_local_sockets():
     import socket
     import struct

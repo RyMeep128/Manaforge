@@ -37,6 +37,7 @@ class MultiplayerPanel(W.QWidget):
         self.launch = None
         self.started = False
         self.finished = False
+        self.normal_result = False
         self.admitted = False
         self.remote_finished = threading.Event()
         self.jobs = JobQueue(self)
@@ -175,7 +176,7 @@ class MultiplayerPanel(W.QWidget):
                 )
             )
             self.hosting = hosting
-            self.started = self.finished = self.admitted = False
+            self.started = self.finished = self.admitted = self.normal_result = False
             self.remote_finished.clear()
             self.model = (
                 MultiplayerLobby(self.workspace.format.currentData())
@@ -493,7 +494,7 @@ class MultiplayerPanel(W.QWidget):
     def render(self):
         active = self.relay is not None and not self.relay.closed
         for button in (self.host, self.join):
-            button.setEnabled(not active and not self.busy)
+            button.setEnabled(not active and not self.busy and not self.started)
         self.endpoint.setEnabled(not active and not self.busy)
         self.code.setReadOnly(active)
         for button in (self.copy_code, self.copy_invite):
@@ -584,6 +585,10 @@ class MultiplayerPanel(W.QWidget):
         if state in ("completed", "failed", "cancelled"):
             self.finished = True
             outcome = value.get("outcome") if isinstance(value, dict) else None
+            self.normal_result = outcome in ("win", "loss", "draw")
+            if not self.normal_result:
+                self.fail("GAME_INTERRUPTED")
+                return
             if (
                 self.relay
                 and not self.relay.closed
@@ -600,7 +605,7 @@ class MultiplayerPanel(W.QWidget):
 
     @C.pyqtSlot(str)
     def fail(self, code):
-        if self.finished:
+        if self.normal_result:
             return
         self.jobs.cancel_all()
         if self.tunnel:
@@ -635,7 +640,7 @@ class MultiplayerPanel(W.QWidget):
         self.model = self.view = None
         self.admitted = False
         self.target_port = None
-        self.started = self.finished = False
+        self.started = self.finished = self.normal_result = False
         self.message.setText("Host a game or enter a friend's invitation.")
         self.render()
 

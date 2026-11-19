@@ -54,10 +54,13 @@ def test_host_button_survives_qt_events_and_receives_join_code(tmp_path):
                 and panel.model.seats[1].kind == 'open'
                 and 'Join code:' in panel.message.text()
             )
-            panel.finished = True
-            panel.relay.close()
-            panel.render()
-            result['passed'] = result['passed'] and panel.leave.isEnabled()
+            panel._status('fixture', 'failed', 'SESSION_EOF')
+            result['passed'] = (result['passed'] and panel.leave.isEnabled()
+                and panel.finished and not panel.normal_result and panel.relay.closed
+                and not panel.admitted and not panel.remote_finished.is_set())
+            panel._status('fixture', 'completed', {{'outcome': 'win'}})
+            panel.fail('RELAY_DISCONNECTED')
+            result['passed'] = result['passed'] and panel.message.text() == 'Game result: win'
             panel.reset()
             app.quit()
         poll = C.QTimer()
