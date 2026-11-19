@@ -93,6 +93,7 @@ namespace Manaforge.Play.Protocol
         {
             if(state==ClientChannelState.Disposed || state==ClientChannelState.Stopped)return;
             if(state==ClientChannelState.Completed && graceful)return;
+            if(!graceful)UnityEngine.Debug.LogWarning("Manaforge channel stopped: "+code);
             state=graceful?ClientChannelState.Completed:ClientChannelState.Stopped;
             ClearDecision();commands.Disconnect();Organization.Dispose();
             if(graceful)inbox.FinishInput();else inbox.Cancel();

@@ -116,6 +116,22 @@ def test_invalid_replacement_deck_cannot_leave_seat_ready():
     assert lobby.seats[0].deck is None and not lobby.seats[0].ready
 
 
+@pytest.mark.parametrize("code", ["GAMEPLAY_RESPONSE_UNPROVEN", "PRIVATE message"])
+def test_host_observes_shared_failure_from_either_seat(tmp_path, code):
+    from mtg_play.multiplayer_runtime import _raise_game_error
+    from mtg_play.live_game import LiveGameError
+    import json
+
+    seat = tmp_path / "seat-0"
+    seat.mkdir()
+    (tmp_path / "game-error.json").write_text(json.dumps({"code": code}))
+    expected = (
+        code if code == "GAMEPLAY_RESPONSE_UNPROVEN" else "MULTIPLAYER_ENGINE_FAILED"
+    )
+    with pytest.raises(LiveGameError, match=expected):
+        _raise_game_error(seat)
+
+
 def test_tunnel_preserves_action_and_receipt_order_with_unbuffered_local_sockets():
     import socket
     import struct

@@ -20,6 +20,12 @@ or Unity preview launch buttons. Diagnostic preview tooling remains available to
 developers. Installed builds retain the release gate; the source override is
 `MANAFORGE_ENABLE_LOCAL_PLAY` (enabled by default).
 
+The selected XMage fork offers a fresh seven-card hand after each London mulligan.
+Choose Keep or Mulligan again before selecting any cards to put on the bottom;
+XMage requests those cards only for the hand you keep. The opening-hand controls
+show the kept hand size after each redraw and preserve the format's free-mulligan
+rules. Submitted opening-hand choices display a waiting-for-opponent message.
+
 ## Online lobbies
 
 Select **Online**, then **Host Game** to generate a join code. Share **Copy Code**
@@ -48,6 +54,10 @@ opponent sees those positions across the table with card text kept upright.
 A lost game connection interrupts the session rather than assigning a winner.
 Reconnect and host migration are not implemented. Closing Unity after a normal
 result retains that result; use Leave Lobby to set up the next game.
+Leave Lobby also remains available after an interrupted connection. Engine failures
+from either seat are retained in the host's session diagnostics, including only
+safe exception types and adapter locations. Client logs record the original receive
+or protocol stop code so shutdown interruptions do not hide the first failure.
 
 The shared relay uses Workers Free and hibernating SQLite-backed Durable Objects.
 Free quotas are account-wide limits, not unlimited capacity. See the

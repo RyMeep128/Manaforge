@@ -97,7 +97,8 @@ namespace Manaforge.Play
                     updates.Enqueue(update);bytes+=update.ByteCount;update=null;return true;
                 }
             }
-            catch{Stop("VIEWER_RECEIVE_FAILED");return false;}
+            catch(WireEnvelope.EnvelopeException error){UnityEngine.Debug.LogWarning("Manaforge receive stopped: "+error.Code);Stop(error.Code);return false;}
+            catch(Exception error){UnityEngine.Debug.LogWarning("Manaforge receive stopped: VIEWER_RECEIVE_FAILED "+error.GetType().Name);Stop("VIEWER_RECEIVE_FAILED");return false;}
             finally{packet?.Dispose();update?.Dispose();Volatile.Write(ref receiving,0);}
         }
         public void Cancel(){Stop("VIEWER_OWNER_CANCELLED");}

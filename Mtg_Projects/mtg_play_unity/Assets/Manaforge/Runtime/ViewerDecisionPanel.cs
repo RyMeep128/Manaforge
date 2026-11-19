@@ -156,11 +156,11 @@ namespace Manaforge.Play
                 if(pending.Status==TaskStatus.RanToCompletion)submitted=pending.Result;
                 else Priority.Failed();
                 var error=pending.Exception?.GetBaseException() as WireEnvelope.EnvelopeException;
-                status.text=error?.Code=="AMOUNT_OUT_OF_RANGE"?"Enter values within the displayed limits.":error?.Code=="SESSION_NUMERIC_UNAVAILABLE"?"Numeric limits are unavailable. Wait for gateway state.":pending.IsCanceled || pending.IsFaulted?"Command was not confirmed. Check the current decision.":"Command sent. Waiting for gateway state.";pending=null;
+                status.text=error?.Code=="AMOUNT_OUT_OF_RANGE"?"Enter values within the displayed limits.":error?.Code=="SESSION_NUMERIC_UNAVAILABLE"?"Numeric limits are unavailable. Wait for the game to update.":pending.IsCanceled || pending.IsFaulted?"Command was not confirmed. Check the current decision.":"Choice sent. Waiting for the game.";pending=null;
             }
             var feedback=host.CommandFeedback(offer,submitted);
             if(feedback!=null){
-                status.text=FeedbackText(feedback.State);
+                status.text=FeedbackText(feedback.State,(offer.Frame.Decision?.Prompt??"").StartsWith("Mulligan",StringComparison.OrdinalIgnoreCase));
                 if(feedback.State==CommandState.Rejected || feedback.State==CommandState.Uncertain)Priority.Failed();
             }
             Root.EnableInClassList("command-pending",pending!=null || feedback?.State==CommandState.Submitted);
@@ -169,7 +169,7 @@ namespace Manaforge.Play
             controls.SetEnabled(offer.CanSubmit && pending==null);manaInput.SetEnabled(offer.CanSubmit && pending==null);priorityActions?.Refresh();
             numericSubmit?.SetEnabled(TryNumbers(out _,false));
             controls.Q<Button>("decision-pass-turn")?.SetEnabled(offer.CanSubmit && pending==null && !Priority.Current.Paused);
-            if(!offer.CanSubmit && pending==null && string.IsNullOrEmpty(status.text))status.text="Waiting for gateway state.";
+            if(!offer.CanSubmit && pending==null && string.IsNullOrEmpty(status.text))status.text="Waiting for the game.";
             if(!soleAbilityAttempted && pending==null && offer.CanSubmit && offer.Frame.Decision?.AbilitySelection==true
                 && offer.Frame.Decision.Family=="selection" && !offer.Frame.Decision.IsPriority && offer.Frame.Decision.RequestId==null
                 && !offer.Frame.Decision.CanFinish && offer.Frame.Decision.Options.Count==1 && offer.Frame.Actions.Count==0){
@@ -241,14 +241,14 @@ namespace Manaforge.Play
             if(cardChoices==null){cardChoices=new Foldout{text="Card and player choices",value=false,name="board-choice-alternatives"};cardChoices.style.width=Length.Percent(100);controls.Add(cardChoices);}
             cardChoices.Add(button);
         }
-        private static string FeedbackText(CommandState state)
+        internal static string FeedbackText(CommandState state,bool openingMulligan=false)
         {
             switch(state) {
-                case CommandState.Submitted:return "Gateway reports submitted. Waiting for confirmation.";
-                case CommandState.Confirmed:return "Gateway confirmed command. Waiting for updated state.";
-                case CommandState.Rejected:return "Gateway rejected command. Check the current decision.";
+                case CommandState.Submitted:return openingMulligan?"Waiting for your opponent to decide…":"Waiting for the game to update…";
+                case CommandState.Confirmed:return openingMulligan?"Choice accepted. Waiting for the next opening-hand decision…":"Action accepted. Waiting for the game to update…";
+                case CommandState.Rejected:return "That action could not be applied. Check the current decision.";
                 case CommandState.Uncertain:return "Command outcome is uncertain. Do not retry.";
-                default:return "Command sent. Waiting for gateway state.";
+                default:return "Choice sent. Waiting for the game.";
             }
         }
         private static Button Button(string name,string text,Action click)
@@ -311,9 +311,9 @@ namespace Manaforge.Play
         {
             bool number=decision.Family=="number";
             if(!decision.Minimum.HasValue || !decision.Maximum.HasValue || decision.Minimum>decision.Maximum || (!number && decision.Amounts.Count>WireMessages.MaxAmountValues)) {
-                controls.Add(NumericLabel("Supported numeric limits are unavailable. Wait for gateway state."));return;
+                controls.Add(NumericLabel("Supported numeric limits are unavailable. Wait for the game to update."));return;
             }
-            foreach(var constraint in decision.Amounts)if(!number && constraint.Minimum>constraint.Maximum){controls.Add(NumericLabel("Supported numeric limits are unavailable. Wait for gateway state."));return;}
+            foreach(var constraint in decision.Amounts)if(!number && constraint.Minimum>constraint.Maximum){controls.Add(NumericLabel("Supported numeric limits are unavailable. Wait for the game to update."));return;}
             int count=number?1:decision.Amounts.Count;if(numericText==null)numericText=new string[count];
             controls.Add(NumericLabel((number?"Allowed value: ":"Allowed total: ")+Integer(decision.Minimum.Value)+" to "+Integer(decision.Maximum.Value)));
             controls.Add(NumericLabel(number?"Enter a whole number, then confirm.":"Set each amount, then confirm. Drag tiles to rearrange recipients."));

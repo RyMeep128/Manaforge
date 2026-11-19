@@ -18,6 +18,15 @@ namespace Manaforge.Play.Tests
             Assert.That(OpeningMulliganControls.Apply(root,7),Is.True);
             Assert.That(root.Q<Button>("decision-option-0"),Is.SameAs(yes));Assert.That(yes.text,Is.EqualTo("Mulligan"));Assert.That(no.text,Is.EqualTo("Keep 7"));Assert.That(no.enabledSelf,Is.False);
         }
+        [TestCase("Mulligan down to 5 cards?","Keep 6")]
+        [TestCase("Mulligan down to 4 cards?","Keep 5")]
+        [TestCase("Mulligan down to 1 card?","Keep 2")]
+        [TestCase("Mulligan down to 0 cards?","Keep 1")]
+        [TestCase("Mulligan for free, draw another 7 cards?","Keep 7")]
+        public void EveryRedrawKeepsTheOpeningHandPresentation(string question,string keep)
+        {var root=Panel(question);Assert.That(OpeningMulliganControls.Apply(root,7),Is.True);Assert.That(root.Q<Button>("decision-option-0").text,Is.EqualTo("Mulligan"));Assert.That(root.Q<Button>("decision-option-1").text,Is.EqualTo(keep));}
+        [Test] public void SubmittedMulliganWaitsForTheOpponentInPlayerLanguage()
+        {Assert.That(ViewerDecisionPanel.FeedbackText(Manaforge.Play.Protocol.CommandState.Submitted,true),Is.EqualTo("Waiting for your opponent to decide…"));}
         [TestCase("Another decision","Yes","No",7)]
         [TestCase("Mulligan down to 6 cards?","No","Yes",7)]
         [TestCase("Mulligan down to 6 cards?","Yes","No",6)]

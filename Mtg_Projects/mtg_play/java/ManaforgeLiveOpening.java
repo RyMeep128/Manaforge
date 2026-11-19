@@ -787,12 +787,21 @@ public final class ManaforgeLiveOpening {
         }
     }
     private String withCombatCase(String source){if(combatCase==null && automaticPayment==null)return source;JsonObject report=JsonParser.parseString(source).getAsJsonObject();if(automaticPayment!=null)for(Map.Entry<String,JsonElement> entry:automaticPayment.report().entrySet())report.add(entry.getKey(),entry.getValue());if(combatCase!=null)for(Map.Entry<String,JsonElement> entry:combatCase.report().entrySet())report.add(entry.getKey(),entry.getValue());return report.toString();}
+    private static void multiplayerFailure(ManaforgeLiveOpening[] peers,java.nio.file.Path root,Throwable failure){
+        JsonObject error=new JsonObject();String code=failure.getMessage();error.addProperty("code",code!=null && code.matches("[A-Z_0-9]{1,100}")?code:"MULTIPLAYER_ENGINE_FAILED");
+        error.addProperty("exception_type",failure.getClass().getSimpleName());JsonArray frames=new JsonArray();
+        for(StackTraceElement frame:failure.getStackTrace())if(frames.size()<12 && (frame.getClassName().startsWith("Manaforge") || frame.getClassName().startsWith("Native") || frame.getClassName().startsWith("manaforge.")))frames.add(frame.getClassName()+"."+frame.getMethodName()+":"+frame.getLineNumber());
+        error.add("adapter_frames",frames);
+        try{java.nio.file.Files.write(root.resolve("game-error.json"),error.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8),java.nio.file.StandardOpenOption.CREATE_NEW);}catch(IOException ignored){}
+        for(ManaforgeLiveOpening p:peers){p.cancelled.set(true);p.multiplayerWake.signal();}
+    }
     /** Two independent native human clients share one authoritative XMage match.
      * Each continuation keeps its existing typed evidence and receipt semantics. */
     public static void multiplayer(String[] args) {
         PrintStream report=System.out;System.setOut(System.err);
         ManaforgeLiveOpening[] peers={new ManaforgeLiveOpening(),new ManaforgeLiveOpening()};
         ManaforgeMatchCoordinator coordinator=null;ExecutorService seats=Executors.newFixedThreadPool(2);
+        final java.nio.file.Path failureRoot=java.nio.file.Paths.get(args[2]).getParent();
         try {
             String raw=manaforge.protocol.TextFrame.read(System.in);
             manaforge.protocol.LaunchContracts.LaunchManifest manifest=manaforge.protocol.LaunchManifestReader.parse(raw,"1.4.62-V1",System.getProperty("manaforge.adapterVersion"),args[1]);
@@ -827,19 +836,19 @@ public final class ManaforgeLiveOpening {
             host.installGameplay(new ManaforgeMatchCoordinator.Gameplay(){
                 public void connected(String id,manaforge.protocol.GatewayHandshake.ViewerContext context) throws Exception {if(!contexts.get(id).offer(context))throw new IOException("RECONNECT_UNAVAILABLE");}
                 public void receive(String id,String wire) throws Exception {if(!inputs.get(id).offer(wire))throw new IOException("GAMEPLAY_INPUT_OVERFLOW");for(ManaforgeLiveOpening p:peers)if(p.liveLaunch.viewer().equals(id))p.multiplayerWake.signal();}
-                public void disconnected(String id){for(ManaforgeLiveOpening p:peers){p.cancelled.set(true);p.multiplayerWake.signal();}}
+                public void disconnected(String id){if(!peers[0].cancelled.get() && !peers[1].cancelled.get())multiplayerFailure(peers,failureRoot,new IOException("MULTIPLAYER_"+host.status(id).reason));for(ManaforgeLiveOpening p:peers){p.cancelled.set(true);p.multiplayerWake.signal();}}
             });host.start();
             for(int i=0;i<2;i++){
                 final int index=i;ManaforgeLiveOpening p=peers[i];
                 seats.submit(()->{try{
                     String mode=modes.get(index).getAsString();p.automaticPayment=new NativeAutomaticPayment(p.liveLaunch.session(),p.engineViewer,manaforge.payment.PaymentCoordinator.Mode.valueOf(mode));
                     p.multiplayerSeat(host,contexts.get(p.liveLaunch.viewer()),inputs.get(p.liveLaunch.viewer()));
-                }catch(Exception failure){try{JsonObject error=new JsonObject();String code=failure.getMessage();error.addProperty("code",code!=null && code.matches("[A-Z_0-9]{1,100}")?code:"MULTIPLAYER_ENGINE_FAILED");p.writeGameReport("game-error",error);}catch(IOException ignored){}for(ManaforgeLiveOpening other:peers)other.cancelled.set(true);}});
+                }catch(Throwable failure){if(!(failure instanceof InterruptedException && p.cancelled.get()))multiplayerFailure(peers,failureRoot,failure);}});
             }
             JsonObject ready=new JsonObject();ready.add("seats",addresses);java.nio.file.Files.write(java.nio.file.Paths.get(args[2]),ready.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8),java.nio.file.StandardOpenOption.CREATE_NEW);
             Thread lifeline=new Thread(()->{try{while(System.in.read()!=-1){}}catch(IOException ignored){}for(ManaforgeLiveOpening p:peers)p.cancelled.set(true);},"multiplayer-owner");lifeline.setDaemon(true);lifeline.start();
             while(!peers[0].cancelled.get() && !peers[1].cancelled.get())Thread.sleep(50);
-        }catch(Exception failure){System.err.println("MULTIPLAYER_STARTUP_FAILED");}
+        }catch(Exception failure){multiplayerFailure(peers,failureRoot,failure);System.err.println("MULTIPLAYER_STARTUP_FAILED");}
         finally{
             for(ManaforgeLiveOpening p:peers)p.cancelled.set(true);seats.shutdownNow();
             if(coordinator!=null)try{coordinator.close();}catch(Exception ignored){}

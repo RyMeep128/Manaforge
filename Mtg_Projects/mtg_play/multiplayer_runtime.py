@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 from pathlib import Path
 import secrets
 import time
@@ -19,6 +20,27 @@ from .session_logs import network_timing_summary
 from .viewer_bootstrap import export_viewer_bootstrap
 
 
+def _raise_game_error(root):
+    errors = [root / "game-error.json"]
+    if root.name == "seat-0":
+        errors.append(root.parent / "game-error.json")
+    for error in errors:
+        if error.is_file():
+            code = "MULTIPLAYER_ENGINE_FAILED"
+            try:
+                if error.stat().st_size <= 8192:
+                    candidate = json.loads(error.read_text(encoding="utf-8")).get(
+                        "code"
+                    )
+                    if isinstance(candidate, str) and re.fullmatch(
+                        r"[A-Z_0-9]{1,100}", candidate
+                    ):
+                        code = candidate
+            except (OSError, ValueError, AttributeError):
+                pass
+            raise LiveGameError(code)
+
+
 def wait_json(root, name, cancel, process=None, seconds=120):
     path = root / (name + ".json")
     deadline = time.monotonic() + seconds
@@ -30,8 +52,7 @@ def wait_json(root, name, cancel, process=None, seconds=120):
             or time.monotonic() >= deadline
         ):
             raise LiveGameError("MULTIPLAYER_STARTUP_FAILED")
-        if (root / "game-error.json").is_file():
-            raise LiveGameError("MULTIPLAYER_ENGINE_FAILED")
+        _raise_game_error(root)
         time.sleep(0.02)
     if path.stat().st_size > 16384:
         raise LiveGameError("MULTIPLAYER_READY_INVALID")
@@ -69,11 +90,11 @@ def watch_player(owner, root, cancel, report):
             return {"outcome": None, "interrupted": True}
         if time.monotonic() >= deadline:
             raise LiveGameError("UNITY_GAME_SESSION_TIMEOUT")
-        if (root / "game-error.json").is_file():
-            raise LiveGameError("MULTIPLAYER_ENGINE_FAILED")
+        _raise_game_error(root)
         gateway = owner.gateway_process
         if gateway is not None and gateway.poll() is not None:
             raise LiveGameError("GAME_INTERRUPTED")
+    _raise_game_error(root)
     if owner.client_exit_code != 0:
         raise LiveGameError("UNITY_GAME_PLAYER_FAILED")
     closed = wait_json(root, "game-closed", cancel, seconds=5)

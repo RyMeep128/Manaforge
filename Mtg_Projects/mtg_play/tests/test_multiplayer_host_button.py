@@ -54,6 +54,10 @@ def test_host_button_survives_qt_events_and_receives_join_code(tmp_path):
                 and panel.model.seats[1].kind == 'open'
                 and 'Join code:' in panel.message.text()
             )
+            panel.finished = True
+            panel.relay.close()
+            panel.render()
+            result['passed'] = result['passed'] and panel.leave.isEnabled()
             panel.reset()
             app.quit()
         poll = C.QTimer()

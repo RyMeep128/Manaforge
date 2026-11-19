@@ -81,6 +81,36 @@ def test_log_retention_limits_sessions_and_preserves_oversized_log_tail(
     )
 
 
+def test_multiplayer_adapter_failure_survives_cleanup_without_raw_exception_text():
+    launch = LiveGameLaunch()
+    launch.allocate()
+    (launch.root / "player.log").write_text(
+        "Manaforge channel stopped: FRAME_TIMEOUT\nManaforge channel stopped: SESSION_CANCELLED\n"
+    )
+    (launch.root / "game-error.json").write_text(
+        json.dumps(
+            {
+                "code": "GAMEPLAY_RESPONSE_UNPROVEN",
+                "exception_type": "IOException",
+                "adapter_frames": [
+                    "ManaforgeGameplaySession.offerCore:108",
+                    "PRIVATE DECK OR MESSAGE",
+                ],
+                "message": "PRIVATE DECK OR MESSAGE",
+            }
+        )
+    )
+    launch.close()
+    report = json.loads((launch.log_directory / "diagnostic.json").read_text())
+    assert report["error_code"] == "GAMEPLAY_RESPONSE_UNPROVEN"
+    assert report["client_stop_code"] == "FRAME_TIMEOUT"
+    assert report["adapter_failure"] == {
+        "exception_type": "IOException",
+        "frames": ["ManaforgeGameplaySession.offerCore:108"],
+    }
+    assert "PRIVATE" not in json.dumps(report)
+
+
 def test_log_storage_failure_does_not_prevent_private_workspace_cleanup(monkeypatch):
     launch = LiveGameLaunch()
     launch.allocate()

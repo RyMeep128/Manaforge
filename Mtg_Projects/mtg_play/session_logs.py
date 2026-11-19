@@ -133,6 +133,7 @@ def retain_session_logs(
     target = archive / ("session-" + stamp + "-" + uuid.uuid4().hex)
     target.mkdir(mode=0o700)
     truncated = False
+    client_stop_code = None
     if has_log:
         with log.open("rb") as stream:
             stream.seek(0, 2)
@@ -141,6 +142,12 @@ def retain_session_logs(
             stream.seek(max(0, size - MAX_PLAYER_LOG_BYTES))
             data = stream.read(MAX_PLAYER_LOG_BYTES)
         (target / "player.log").write_bytes(data)
+        stopped = re.search(
+            rb"(?m)^Manaforge (?:channel|receive) stopped: ([A-Z_0-9]{1,100})(?:\s|$)",
+            data,
+        )
+        if stopped:
+            client_stop_code = stopped.group(1).decode("ascii")
     if has_timing:
         with timing.open("rb") as stream:
             stream.seek(0, 2)
@@ -164,6 +171,35 @@ def retain_session_logs(
     }
     if engine is not None:
         report["engine"] = engine
+    if client_stop_code is not None:
+        report["client_stop_code"] = client_stop_code
+    failure = source / "game-error.json"
+    if (
+        failure.is_file()
+        and not failure.is_symlink()
+        and not failure.is_junction()
+        and failure.stat().st_size <= 8192
+    ):
+        try:
+            value = json.loads(failure.read_text(encoding="utf-8"))
+            kind = value.get("exception_type")
+            frames = value.get("adapter_frames", [])
+            if isinstance(kind, str) and re.fullmatch(r"[A-Za-z0-9_$]{1,100}", kind):
+                report["adapter_failure"] = (
+                    {
+                        "exception_type": kind,
+                        "frames": [
+                            frame
+                            for frame in frames[:12]
+                            if isinstance(frame, str)
+                            and re.fullmatch(r"[A-Za-z0-9_.$<>:]{1,200}", frame)
+                        ],
+                    }
+                    if isinstance(frames, list)
+                    else {"exception_type": kind}
+                )
+        except (OSError, ValueError, AttributeError):
+            pass
     timings = network_timing_summary(source)
     if timings:
         report["network_timing"] = timings

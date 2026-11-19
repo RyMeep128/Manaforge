@@ -498,7 +498,7 @@ class MultiplayerPanel(W.QWidget):
         self.code.setReadOnly(active)
         for button in (self.copy_code, self.copy_invite):
             button.setEnabled(active and self.admitted)
-        self.leave.setEnabled(active or self.busy)
+        self.leave.setEnabled(active or self.busy or self.started or self.finished)
         self.start.setVisible(self.hosting)
         self.start.setEnabled(
             bool(

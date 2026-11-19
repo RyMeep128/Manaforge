@@ -17,7 +17,7 @@ sys.path.insert(0, str(ROOT / "Mtg_Projects"))
 from mtg_play.engine_fork import git, source_revision, read_lock, verify_artifacts, validate_toolchain  # noqa: E402
 
 MODULES = "Mage.Server,Mage.Client,Mage.Tests"
-FOCUSED = "FeatherRadiantArbiterTest,ImmortalObligation*Test,HitItTest,MjolnirHammerOfThorTest"
+FOCUSED = "FeatherRadiantArbiterTest,ImmortalObligation*Test,HitItTest,MjolnirHammerOfThorTest,LondonMulliganTest,SmoothedLondonMulliganTest"
 
 
 def digest(path):

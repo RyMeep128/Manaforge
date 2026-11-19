@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UIElements;
+using System.Text.RegularExpressions;
 
 namespace Manaforge.Play
 {
@@ -12,9 +13,13 @@ namespace Manaforge.Play
             if(root==null || handCount!=7)return false;
             var prompt=root.Q<Label>("decision-prompt");
             var yes=root.Q<Button>("decision-option-0");var no=root.Q<Button>("decision-option-1");
-            if(prompt==null || OpeningHandFan.PlainPrompt(prompt.text)!="Mulligan down to 6 cards?" || yes==null || no==null || yes.text!="Yes" || no.text!="No" || (root.Q("decision-controls")??root).Query<Button>().ToList().Count!=2)return false;
+            if(prompt==null || yes==null || no==null || yes.text!="Yes" || no.text!="No" || (root.Q("decision-controls")??root).Query<Button>().ToList().Count!=2)return false;
+            string question=OpeningHandFan.PlainPrompt(prompt.text);var paid=Regex.Match(question,@"^Mulligan down to ([0-6]) cards?\?$");
+            bool free=Regex.IsMatch(question,@"^Mulligan for free, draw another 7 cards\?$");
+            if(!paid.Success && !free)return false;
+            int keep=free?7:int.Parse(paid.Groups[1].Value)+1;
             Style(yes,"Mulligan",new Color(.22f,.25f,.85f),new Color(.65f,.65f,1));
-            Style(no,"Keep 7",new Color(.95f,.36f,.08f),new Color(1,.75f,.35f));
+            Style(no,"Keep "+keep,new Color(.95f,.36f,.08f),new Color(1,.75f,.35f));
             return true;
         }
         public static bool ApplyLocalSkins(VisualElement root)=>ApplySkins(root,
@@ -24,7 +29,7 @@ namespace Manaforge.Play
         {
             if(root==null || blue==null || orange==null)return false;
             var mulligan=root.Q<Button>("decision-option-0");var keep=root.Q<Button>("decision-option-1");
-            if(mulligan==null || keep==null || mulligan.text!="Mulligan" || keep.text!="Keep 7")return false;
+            if(mulligan==null || keep==null || mulligan.text!="Mulligan" || !Regex.IsMatch(keep.text??"",@"^Keep [1-7]$"))return false;
             Skin(mulligan,blue);Skin(keep,orange);return true;
         }
         private static void Skin(Button button,Texture2D texture)

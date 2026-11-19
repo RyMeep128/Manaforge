@@ -15,7 +15,7 @@ namespace Manaforge.Play
         {
             if(texture==null)return;
             foreach(var button in root.Query<Button>().ToList()){
-                if(button.text!="Mulligan" && button.text!="Keep 7")continue;
+                if(button.text!="Mulligan" && !(button.text??"").StartsWith("Keep "))continue;
                 var parent=button.parent;int index=parent.IndexOf(button);
                 var holder=new VisualElement{name="opening-glow-holder"};holder.style.width=OpeningMulliganControls.ButtonWidth;holder.style.height=OpeningMulliganControls.ButtonHeight;holder.style.marginLeft=OpeningMulliganControls.ButtonMargin;holder.style.marginRight=OpeningMulliganControls.ButtonMargin;
                 var image=new Image{name="opening-button-glow",image=texture,pickingMode=PickingMode.Ignore,scaleMode=ScaleMode.StretchToFill,tintColor=button.text=="Mulligan"?new Color(.4f,.4f,1):new Color(1,.45f,.12f)};

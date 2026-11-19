@@ -89,6 +89,7 @@ namespace Manaforge.Play
             }
             host.Tick(); // Clear revoked viewer resources before the text-only result fanfare.
             var final=Volatile.Read(ref latest);
+            if(final?.Result==null && !userRequested && host.Completion.IsCompleted){var ended=host.Completion.Result;string code=ended.Session?.Code??ended.Code;Write("game-error",new JObject{["code"]=code});}
             if(final?.Result!=null){presentation.Present(final);yield return new WaitForEndOfFrame();if(acceptance!=null && ArtworkFixtureScene.Argument("-manaforgeNoCapture")!="1")ScreenCapture.CaptureScreenshot(Path.Combine(output,"result.png"));if(acceptance!=null)yield return new WaitForSecondsRealtime(.3f);else while(!quit){host.Tick();yield return null;}}
             Write("game-closing",new JObject{["live_game_version"]=1,["requested"]=quit});
             if(spatialAcceptance!=null){Write("board-input-proof",new JObject{["card_keyboard_inputs"]=spatialAcceptance.Inputs});spatialAcceptance.Dispose();}
