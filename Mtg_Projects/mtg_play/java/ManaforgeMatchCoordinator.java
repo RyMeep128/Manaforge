@@ -176,7 +176,9 @@ public final class ManaforgeMatchCoordinator implements AutoCloseable {
             final long receivedAt=System.nanoTime();
             try{owner.execute(()->{try{
                 if(stopping.get())return;synchronized(channel){if(channel.connection!=connection || !connection.active)return;}
-                boolean organization=channel.extensionAllowed && WireEnvelope.parseObject(incoming).get("message_type").getAsString().startsWith("organization_");
+                // Extension-only transports own their wire format, including non-JSON payloads.
+                // Inspect the envelope only when choosing between gameplay and extension handlers.
+                boolean organization=channel.extensionAllowed && gameplay!=null && WireEnvelope.parseObject(incoming).get("message_type").getAsString().startsWith("organization_");
                 if(NETWORK_TIMING && !organization && gameplay!=null){JsonObject command=WireEnvelope.parse(incoming);String id=command.get("message_id").getAsString();if(id(id)){channel.timingCommand=id;channel.timingReceived=receivedAt;timing("gateway_received",id,receivedAt,channel.revision);}}
                 if(organization)extension.receive(channel.viewer.seat,incoming);else if(gameplay!=null)gameplay.receive(channel.viewer.seat,incoming);else extension.receive(channel.viewer.seat,incoming);
             }catch(Exception failure){disconnect(channel,connection,"EXTENSION_REJECTED");}finally{channel.incoming.decrementAndGet();}});}
