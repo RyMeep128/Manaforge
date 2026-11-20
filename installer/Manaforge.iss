@@ -1,4 +1,7 @@
 ; Side-by-side per-user installs. User data is never part of the payload.
+#if VER < 0x07000000
+  #error Inno Setup 7 or newer is required for long installed XMage paths
+#endif
 #ifndef AppVersion
   #error AppVersion must be supplied by CI
 #endif

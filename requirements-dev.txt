@@ -2,3 +2,5 @@
 pytest>=8,<10
 ruff==0.16.9
 jsonschema==4.23.0
+# Read Windows runtime DLL versions in packaging regression tests.
+pefile==2024.8.26

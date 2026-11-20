@@ -219,14 +219,23 @@ jobs:
           $launcherExe = Join-Path $env:GITHUB_WORKSPACE 'launcher-output/Manaforge.exe'
           & $compiler /nologo /target:winexe /platform:anycpu /reference:System.Web.Extensions.dll /reference:System.Windows.Forms.dll /reference:System.Core.dll "/win32icon:$launcherIcon" "/out:$launcherExe" $launcherSource
           if ($LASTEXITCODE -ne 0) { throw 'Permanent launcher compilation failed' }
+      - name: Install pinned compiler with long-path support
+        run: |
+          $download = Join-Path $env:RUNNER_TEMP 'innosetup-7.1.1-x64.exe'
+          Invoke-WebRequest 'https://github.com/jrsoftware/issrc/releases/download/is-7_1_1/innosetup-7.1.1-x64.exe' -OutFile $download
+          $expected = '8a5a6711c3766a6e5fb74f280ba0e3551e719ce94538d901fdbd1f8f9920b3f0'
+          if ((Get-FileHash -LiteralPath $download -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) { throw 'Inno Setup compiler download checksum mismatch' }
+          $compilerDir = Join-Path $env:RUNNER_TEMP 'inno-setup-7'
+          $process = Start-Process -FilePath $download -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER', "/DIR=`"$compilerDir`"") -WindowStyle Hidden -PassThru -Wait
+          if ($process.ExitCode -ne 0) { throw 'Inno Setup compiler installation failed' }
       - name: Inventory payload and compile per-user installer
         run: |
           python tools/application_inventory.py
           $versionLine = Get-Content Mtg_Projects/mtg_proxy/constants.py | Where-Object { $_ -match '^APP_VERSION = ' }
           $version = $versionLine.Split('"')[1]
           if ($version -notmatch '^\d+\.\d+\.\d+-(alpha|beta)\.1$') { throw 'Expected an alpha/beta version' }
-          $compiler = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6/ISCC.exe'
-          if (!(Test-Path -LiteralPath $compiler)) { throw 'Inno Setup 6 is required on the Windows runner' }
+          $compiler = Join-Path $env:RUNNER_TEMP 'inno-setup-7/ISCC.exe'
+          if (!(Test-Path -LiteralPath $compiler)) { throw 'Pinned Inno Setup 7 compiler is missing' }
           & $compiler "/DAppVersion=$version" installer/Manaforge.iss
           if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed' }
           Copy-Item installer-output/Manaforge-Setup.exe Manaforge-Setup.exe
@@ -243,6 +252,12 @@ jobs:
           $target = Join-Path $env:LOCALAPPDATA "Programs/Manaforge/versions/$version"
           $process = Start-Process -FilePath (Join-Path $env:GITHUB_WORKSPACE 'Manaforge-Setup.exe') -ArgumentList @('/VERYSILENT', '/NORESTART', "/DIR=`"$target`"", '/NOLAUNCH=1', '/TASKS=desktopicon') -WindowStyle Hidden -PassThru -Wait
           if ($process.ExitCode -ne 0) { throw 'Installer smoke test failed' }
+          # This bundled sample deck exceeded MAX_PATH in the per-user install
+          # and failed during Inno Setup 6's temporary-file rename.
+          $sample = Join-Path $target "_internal/mtg_play/distribution/xmage/xmage/mage-client/sample-decks/2013/Standard/DailyMTG Reconstructed - Sliving the good Life/Vincent's The Bigger the Gravestone, the Higher the Rank.dck"
+          if ($sample.Length -lt 260) { throw 'Installer regression check must exercise a path of at least 260 characters' }
+          $source = Join-Path $env:GITHUB_WORKSPACE "Mtg_Projects/dist/Manaforge/$($sample.Substring($target.Length + 1))"
+          if ((Get-FileHash -LiteralPath $sample).Hash -ne (Get-FileHash -LiteralPath $source).Hash) { throw 'Long-path sample deck was not installed intact' }
           $receipt = Get-Content -LiteralPath (Join-Path $target 'manaforge-install.json') | ConvertFrom-Json
           if ($receipt.version -ne $version -or !(Test-Path -LiteralPath (Join-Path $target 'Manaforge.exe'))) { throw 'Installer receipt or executable missing' }
           $permanent = Join-Path $env:LOCALAPPDATA 'Programs/Manaforge'

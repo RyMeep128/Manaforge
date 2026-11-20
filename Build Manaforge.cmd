@@ -33,4 +33,8 @@ if not exist "%MANAFORGE_PRODUCTS%\build\gameplay\distribution\xmage\component.j
     "%MANAFORGE_ROOT%run_manaforge.py"
 if errorlevel 1 exit /b 1
 echo Manaforge built at "%MANAFORGE_PRODUCTS%\dist\Manaforge\Manaforge.exe"
+rem PyInstaller can hoist the JRE's legacy VC DLLs into the shared DLL directory.
+rem Align it with Qt before startup checks, inventories, and release archives.
+"%MANAFORGE_PYTHON%" "%MANAFORGE_ROOT%tools\align_windows_runtime.py" "%MANAFORGE_PRODUCTS%\dist\Manaforge"
+if errorlevel 1 exit /b 1
 endlocal
