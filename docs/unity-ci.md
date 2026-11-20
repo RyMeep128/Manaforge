@@ -40,6 +40,9 @@ under the same desktop account that activated the pinned editor in Unity Hub.
 The runner is used only for repository-owner manual dispatches of `main`.
 Pushes, pull requests and other actors cannot select this runner through these
 workflows. `tools/use_personal_unity_ci.ps1` independently enforces that boundary.
+It uses an existing Python 3.12/3.13 installation and JDK 23.0.2+7, with Python
+dependencies isolated in a temporary virtual environment. It does not run the
+hosted Python or Java installers on the owner's PC.
 
 Registering a runner gives repository jobs access to the Windows account's
 machine and files. Obtain the owner's explicit approval before registering it.
