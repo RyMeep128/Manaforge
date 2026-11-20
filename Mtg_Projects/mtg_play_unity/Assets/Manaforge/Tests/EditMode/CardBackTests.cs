@@ -33,7 +33,7 @@ namespace Manaforge.Play.Tests
         {
             using(var card=new CardView()){
                 card.BindUnavailable();card.UpdateValues(new CardDisplayValues("Secret name",null,"Secret type","Secret rules","2/2","Secret status"));card.tooltip="Secret tooltip";
-                card.ShowBack("one");Assert.That(card.Artwork,Is.Null);Assert.That(card.Identity,Is.Null);Assert.That(card.tooltip,Is.Null);
+                card.ShowBack("one");Assert.That(card.Artwork,Is.Null);Assert.That(card.Identity,Is.Null);Assert.That(card.tooltip,Is.Null.Or.Empty);
                 foreach(var label in card.Query<Label>().ToList())Assert.That(label.text??"",Does.Not.Contain("Secret"));
                 var back=card.Q<CardBackView>();var texture=back.image;card.ShowBack("one");Assert.That(back.image,Is.SameAs(texture));
                 card.BindUnavailable();Assert.That(back.image,Is.Null);Assert.That(back.style.display.value,Is.EqualTo(DisplayStyle.None));

@@ -43,7 +43,10 @@ namespace Manaforge.Play.Tests
             component["rect"]["x"]=.123456789123;((JObject)preset["components"])["unknown.future"]=component;
             File.WriteAllText(FilePath,json.ToString());var store=new JsonLayoutPresetStore(directory);var read=await store.ReadAsync();
             var saved=await store.WriteAsync(read.Library.Rename("preset-one","Still here"),read.Revision);
-            var roundtrip=saved.Library.ToJson();Assert.That(JToken.DeepEquals(roundtrip["presets"][0]["components"]["unknown.future"],component),Is.True);
+            // Compare the persisted JSON; in-memory Single values become Double on JSON reads.
+            var roundtrip=saved.Library.ToJson();var restored=roundtrip["presets"][0]["components"]["unknown.future"];
+            Assert.That(JToken.DeepEquals(restored,JToken.Parse(component.ToString(Newtonsoft.Json.Formatting.None))),Is.True);
+            Assert.That((double)restored["rect"]["x"],Is.EqualTo(.123456789123));
             Assert.That((int)roundtrip["futureLibrarySetting"],Is.EqualTo(17));Assert.That((string)roundtrip["presets"][0]["futurePresetSetting"],Is.EqualTo("keep"));
         }
         [TestCase(PresetWriteStage.TemporaryFlushed)] [TestCase(PresetWriteStage.BeforeReplace)]

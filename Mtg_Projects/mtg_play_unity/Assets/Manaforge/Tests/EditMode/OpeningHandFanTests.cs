@@ -65,7 +65,7 @@ namespace Manaforge.Play.Tests
         }
         [Test] public void LandPairsSeparateTapStateAndCounters()
         {
-            var cards=Lands(6,(card,i)=>{card["tapped"]=i>=3;if(i==0)card["characteristics"]["counters"]=new JArray(new JArray("charge",1));});
+            var cards=Lands(6,(card,i)=>{card["tapped"]=i>=3;if(i==0)card["characteristics"]["counters"]=new JArray{new JArray("charge",1)};});
             var stacks=GameplayCardLayout.LandStacks(cards);
             Assert.That(stacks.All(p=>p.Count<=2 && p.All(c=>c.Tapped==p[0].Tapped)),Is.True);
             Assert.That(stacks.Single(p=>p.Any(c=>c.ObjectId=="land-0")).Count,Is.EqualTo(1));

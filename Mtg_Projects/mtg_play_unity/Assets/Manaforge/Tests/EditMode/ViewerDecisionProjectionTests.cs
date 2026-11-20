@@ -148,7 +148,7 @@ namespace Manaforge.Play.Tests
         }
         [Test] public void DecisionProjectionExcludesCardIdentityAndPrivateRevealPayloads()
         {
-            var source=Choice();source["body"]["snapshot"]["observations"]=new JArray(new JObject{["observation_id"]="fixture-reveal",["source"]="fixture",["hidden"]=false,["name"]="Private reveal value",["set_code"]="ABC",["collector_number"]="123"});
+            var source=Choice();source["body"]["snapshot"]["observations"]=new JArray(new JObject{["observation_id"]="fixture-reveal",["source"]="fixture",["hidden"]=false,["name"]="Private reveal value",["set_code"]="ABC",["collector_number"]="123",["group_id"]=null,["group_label"]=null,["oracle_id"]=null,["printing_id"]=null});
             string encoded=JsonConvert.SerializeObject(Project(source));Assert.That(encoded,Does.Not.Contain("Private reveal value"));Assert.That(encoded,Does.Not.Contain("printing_id"));Assert.That(encoded,Does.Not.Contain("deck_entry_id"));Assert.That(encoded,Does.Not.Contain("observations"));
         }
     }

@@ -201,6 +201,7 @@ namespace Manaforge.Play.Tests
         {
             var view=new CardView();
             try{
+                view.BindUnavailable();
                 view.UpdateValues(new CardDisplayValues("Walker",null,"Legendary Planeswalker — Test",null,null,null,loyalty:"5"));
                 Assert.That(view.Q<LoyaltyCounterView>().Value,Is.EqualTo("5"));
                 foreach(string type in new[]{"Creature — Elf","Artifact","Enchantment",null}){
