@@ -21,7 +21,7 @@ import mage.player.human.HumanPlayer;
 
 /** Owned server-side payment integration. Native simulations plan payment; native
  * game-thread activation and allocation remain the sole live rules authority. */
-public final class ContextHumanPlayer extends HumanPlayer {
+public final class ContextHumanPlayer extends RecoveryHumanPlayer {
     private static final long serialVersionUID=1L;
     private static final Field RESPONSE=field("response"),OPEN=field("responseOpenedForAnswer");
     private static Field field(String name) {

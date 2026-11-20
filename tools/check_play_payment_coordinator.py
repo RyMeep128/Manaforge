@@ -173,6 +173,8 @@ def main():
             if key.startswith("xmage/mage-server/lib/") and key.endswith(".jar")
         )
         dependencies.append(jars[1])
+        dependencies.extend(key for key in manifest["artifacts"]
+                            if key.endswith("/mage-player-ai-mad-1.4.62.jar"))
         if args.real_game_payment or args.real_game_multiview:
             for plugin in (
                 "mage-game-twoplayerduel-1.4.62.jar",
@@ -223,6 +225,8 @@ def main():
             ]
             bridge_sources += [
                 PLAY / "java/ManaforgeMetadataChannel.java",
+                PLAY / "java/payment-xmage/manaforge/payment/xmage/RecoveryHumanPlayer.java",
+                PLAY / "java/payment-xmage/manaforge/payment/xmage/NativeMatchRecovery.java",
                 *sorted((PLAY / "protocol/java/manaforge/protocol").glob("*.java")),
             ]
             if args.real_game_payment or args.real_game_multiview:
@@ -252,6 +256,7 @@ def main():
                 ]
             if args.real_game_multiview:
                 bridge_sources += [
+                    PLAY / "java/payment-native-test/NativeRecoveryChecks.java",
                     PLAY / "java/payment-native-test/NativeMultiViewerChecks.java",
                     PLAY / "java/payment-native-test/NativeOrganizationChecks.java",
                     PLAY / "java/payment-native-test/NormalOrganizationChecks.java",
@@ -365,6 +370,11 @@ def main():
                     timeout=180,
                 )
             if args.real_game_multiview:
+                subprocess.run(
+                    [runtime, "-Djava.awt.headless=true", "-cp",
+                     output + os.pathsep + native_classpath, "NativeRecoveryChecks"],
+                    cwd=output, check=True, timeout=120,
+                )
                 subprocess.run(
                     [
                         runtime,

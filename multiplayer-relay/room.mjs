@@ -1,5 +1,6 @@
 // Transport-only room. Never parses gameplay states or broadcasts private payloads.
 import { Buffer } from 'node:buffer';
+import { randomUUID } from 'node:crypto';
 export const MAX_BYTES = 1048576;
 export const CODE = /^[A-HJ-NP-Z2-9]{12}$/;
 export class Room {
@@ -21,23 +22,24 @@ export class Room {
       if ((peer.count = (peer.count ?? 0) + 1) > 100) throw Error('RATE_LIMIT');
       if (!peer.role) {
         if (m.op === 'create' && this.peers.size === 0) {
-          peer.role = 'host'; peer.id = 'host'; peer.created = now; peer.started = false;
+          peer.role = 'host'; peer.id = 'host'; peer.created = now; peer.started = false; peer.recovery = m.recovery_version === 1;
         } else if (m.op === 'join') {
           const host = this.peers.get('host');
-          if (!host || host.started || this.peers.has('guest') || now - host.created > 1800000) throw Error('ROOM_UNAVAILABLE');
-          peer.role = 'guest'; peer.id = 'guest'; peer.created = now;
+          if (!host || (host.started && !host.recovery) || (!host.started && this.peers.has('guest')) || this.peers.size >= 4 || (!host.started && now - host.created > 1800000)) throw Error('ROOM_UNAVAILABLE');
+          peer.role = 'guest'; peer.id = this.peers.has('guest') ? 'guest-' + randomUUID() : 'guest'; peer.created = now;
         } else throw Error('ROOM_UNAVAILABLE');
         this.peers.set(peer.id, peer); peer.save?.();
-        this.send(peer, { op: 'admitted', peer: peer.id });
-        if (peer.role === 'guest') this.send(this.peers.get('host'), { op: 'joined', peer: 'guest' });
+        this.send(peer, { op: 'admitted', peer: peer.id, recovery_version: 1 });
+        if (peer.role === 'guest') this.send(this.peers.get('host'), { op: 'joined', peer: peer.id });
         return;
       }
       if (m.op === 'start' && peer.role === 'host') { peer.started = true; peer.save?.(); return; }
-      if (m.op === 'kick' && peer.role === 'host') { const guest = this.peers.get('guest'); if (guest) this.leave(guest); return; }
+      if (m.op === 'kick' && peer.role === 'host') { const guest = this.peers.get(m.peer ?? 'guest'); if (guest?.role === 'guest') this.leave(guest); return; }
       if (m.op !== 'send' || m.payload === undefined) throw Error('MESSAGE_UNSUPPORTED');
-      const target = this.peers.get(peer.role === 'host' ? 'guest' : 'host');
-      if (!target) throw Error('PEER_UNAVAILABLE');
-      this.send(target, { op: 'message', peer: peer.id, payload: m.payload });
+      const target = this.peers.get(peer.role === 'host' ? (m.peer ?? 'guest') : 'host');
+      if (!target || (peer.role === 'host' && target.role !== 'guest')) { this.send(peer, { op: 'delivery_failed', code: 'PEER_UNAVAILABLE' }); return; }
+      try { this.send(target, { op: 'message', peer: peer.id, payload: m.payload }); }
+      catch { this.leave(target, 'SLOW_CONSUMER'); }
     } catch (error) {
       const code = /^[A-Z_]+$/.test(error.message) ? error.message : 'INVALID_MESSAGE';
       console.warn('RELAY_' + code);
@@ -52,10 +54,10 @@ export class Room {
     // Rejected/unadmitted sockets never own a seat and cannot interrupt a match.
     if (!peer.role) return;
     const host = this.peers.get('host');
-    if (peer.role === 'host' || host?.started) {
+    if (peer.role === 'host') {
       for (const other of [...this.peers.values()]) { this.peers.delete(other.id); try { this.send(other, { op: 'closed', code }); } catch {} try { other.socket.close(1000, code); } catch {} }
     } else if (peer.role === 'guest' && host) {
-      try { this.send(host, { op: 'left', peer: 'guest' }); } catch { this.leave(host); }
+      try { this.send(host, { op: 'left', peer: peer.id, code }); } catch { this.leave(host); }
     }
   }
 }

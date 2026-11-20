@@ -33,6 +33,8 @@ public final class NativeGameLaunch {
     public String format(){return manifest.format;}
     public String session(){return manifest.manifest_id+(multiplayer?"-"+human.seat_id:"");}
     public String viewer(){return human.seat_id;}
+    public String playerName(){return human.name;}
+    public JsonArray commanderNames(){JsonArray names=new JsonArray();for(NativeLaunchEntry entry:designations(human))names.add(entry.name);return names;}
     public JsonArray controllers(){JsonArray result=new JsonArray();for(LaunchSeat seat:manifest.seats)result.add(seat.controller);return result;}
     public JsonArray cards(boolean opponent,boolean sideboard) throws IOException {
         JsonArray result=new JsonArray();long count=0;

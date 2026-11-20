@@ -40,6 +40,8 @@ public final class ManaforgeServerHost {
                     JsonElement results;
                     if(command.has("command") && command.get("command").getAsString().equals("prepare_combat_fixture")) {
                         if(command.size()!=3 || !new JsonPrimitive(true).equals(command.get("skip_shuffling")))throw new IllegalArgumentException("COMBAT_FIXTURE_INVALID");mage.game.GameOptions.getDefault().skipInitShuffling=true;JsonObject prepared=new JsonObject();prepared.addProperty("ordered_decks",true);results=prepared;
+                    } else if(command.has("command") && command.get("command").getAsString().equals("match_recovery")) {
+                        try{results=ManaforgeGameMetadata.recovery(command);}catch(IllegalStateException | ReflectiveOperationException rejected){JsonObject failure=new JsonObject();failure.addProperty("error","RECOVERY_NOT_READY");results=failure;}
                     } else if(command.has("command") && command.get("command").getAsString().equals("start_metadata_channel")) {
                         results=startMetadata(command);
                     } else if (command.has("command") && command.get("command").getAsString().equals("validate_deck")) {

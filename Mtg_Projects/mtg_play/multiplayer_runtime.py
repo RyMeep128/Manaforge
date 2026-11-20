@@ -7,6 +7,8 @@ from pathlib import Path
 import secrets
 import time
 import uuid
+from dataclasses import replace
+from .recovery import HostRecovery, RecoveryMailbox, atomic_json
 from . import connection_proof as transport
 from .contracts import ADAPTER_VERSION
 from .deck_preview import DEFAULT_PLAYER
@@ -78,7 +80,7 @@ def player_command(root, player, acceptance=False):
     return command
 
 
-def watch_player(owner, root, cancel, report):
+def watch_player(owner, root, cancel, report, recovery=None):
     ready = wait_json(root, "game-ready", cancel, seconds=120)
     if ready != {"live_game_version": 1, "authenticated": True}:
         raise LiveGameError("UNITY_GAME_READY_INVALID")
@@ -86,6 +88,8 @@ def watch_player(owner, root, cancel, report):
     report({"phase": "Unity multiplayer game running"})
     deadline = time.monotonic() + 21600
     while owner.client_exit_code is None:
+        if recovery is not None:
+            recovery.tick()
         if cancel.wait(0.05):
             return {"outcome": None, "interrupted": True}
         if time.monotonic() >= deadline:
@@ -183,8 +187,9 @@ def run_host_game(
     xmage_root=None,
     jdk_path=transport.DEFAULT_JDK,
     acceptance=False,
+    recovery_mailbox=None,
 ):
-    if len(setup.seats) != 2 or any(s.controller != "local_human" for s in setup.seats):
+    if len(setup.seats) != 2 or setup.seats[0].controller != "local_human" or setup.seats[1].controller not in ("local_human", "engine_ai"):
         raise LiveGameError("MULTIPLAYER_SETUP_UNSUPPORTED")
     if any(mode not in ("auto", "manual", "full-control") for mode in payment_modes):
         raise LiveGameError("PAYMENT_MODE_INVALID")
@@ -197,8 +202,10 @@ def run_host_game(
     from .engine_fork import manifest_digest
 
     pin = manifest_digest(xmage_root)
+    initial_ai = setup.seats[1].controller == "engine_ai"
+    engine_setup = replace(setup, seats=tuple(replace(seat, controller="local_human") for seat in setup.seats))
     payload = export_launch_manifest(
-        setup, documents, manaforge_version=version, engine_bundle=xmage_root
+        engine_setup, documents, manaforge_version=version, engine_bundle=xmage_root
     )
     manifest = json.loads(payload)
     player = Path(player).resolve()
@@ -275,8 +282,7 @@ def run_host_game(
                 raise LiveGameError("MULTIPLAYER_READY_INVALID")
             owner.gateway_ready()
             remote = addresses[1]
-            remote_prepare(
-                {
+            remote_payload = {
                     "type": "prepare",
                     "format": setup.format,
                     "session_id": remote["session_id"],
@@ -285,9 +291,17 @@ def run_host_game(
                     "artifact_manifest_sha256": pin,
                     "viewer_key_hex": keys[1].hex(),
                     "organization_version": 4,
-                },
-                remote["port"],
+                    "recovery_version": 1,
+                }
+            recovery = HostRecovery(
+                root, server_process, server, gateway, cancel, report,
+                recovery_mailbox or RecoveryMailbox(), remote_payload,
+                lambda payload: remote_prepare(payload, remote["port"]),
+                initial_ai=initial_ai,
             )
+            atomic_json(local_root / "recovery-role.json", {"host": True})
+            if not initial_ai:
+                remote_prepare(remote_payload, remote["port"])
             local = addresses[0]
             owner.start_client(
                 player_command(local_root, player, acceptance),
@@ -305,12 +319,14 @@ def run_host_game(
                     artwork_manifest_sha256=artwork.pin,
                 ),
             )
-            result = watch_player(owner, local_root, cancel, report)
+            result = watch_player(owner, local_root, cancel, report, recovery)
             if os.environ.get("MANAFORGE_NETWORK_TIMING") == "1":
                 result["network_timing"] = network_timing_summary(root)
             if (
                 result.get("outcome") in ("win", "loss", "draw")
                 and remote_finished is not None
+                and recovery.state.controller == "human"
+                and recovery.state.connected
             ):
                 report(
                     {
@@ -369,6 +385,9 @@ def run_guest_game(
             artwork_manifest_sha256=artwork.pin,
         )
         owner.use_remote_gateway()
+        if prepare.get("recovery_version") == 1:
+            atomic_json(root / "recovery-role.json", {"host": False})
+            atomic_json(root / "recovery-state.json", {"paused": True, "ended": False})
         owner.start_client(
             player_command(root, player, acceptance),
             cwd=str(player.parent),

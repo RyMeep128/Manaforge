@@ -396,7 +396,7 @@ def run_proof(
             classpath = os.pathsep.join(
                 (
                     str(server / "lib/*"),
-                    str(server / "plugins/mage-player-human-1.4.62.jar"),
+                    str(server / "plugins/*"),
                 )
             )
             packaged_classes = bridge_classes(bundle)

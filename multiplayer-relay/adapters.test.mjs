@@ -15,14 +15,14 @@ function next(socket) {
 async function open(url, op) {
   const socket = new WebSocket(url);
   await new Promise((resolve, reject) => { socket.once('open', resolve); socket.once('error', reject); });
-  const response = next(socket); socket.send(JSON.stringify({ relay_version: 1, op }));
+  const response = next(socket); socket.send(JSON.stringify({ relay_version: 1, recovery_version: 1, op }));
   assert.equal((await response).op, 'admitted'); return socket;
 }
 for (const [adapter, port, command] of [
   ['standalone', 18787, ['server.mjs']],
   ['cloudflare-local', 18788, ['node_modules/wrangler/bin/wrangler.js', 'dev', '--local', '--ip', '127.0.0.1', '--port', '18788']]
 ]) {
-  test(adapter + ' routes privately and rejects late joins', { timeout: 120000 }, async t => {
+  test(adapter + ' routes privately and preserves active rooms for reconnects', { timeout: 120000 }, async t => {
     const child = spawn(process.execPath, command, { env: { ...process.env, PORT: String(port), WRANGLER_SEND_METRICS: 'false' }, detached: process.platform !== 'win32', stdio: 'inherit' });
     const sockets = [];
     t.after(() => { for (const socket of sockets) socket.terminate(); if (process.platform !== 'win32') { try { process.kill(-child.pid, 'SIGTERM'); } catch {} } else child.kill(); });
@@ -41,7 +41,10 @@ for (const [adapter, port, command] of [
     const message = await receipt; assert.equal(message.peer, 'host'); assert.equal(message.payload.data, 'private-test');
     host.send(JSON.stringify({ relay_version: 1, op: 'start' }));
     const late = new WebSocket(url); sockets.push(late); await new Promise(r => late.once('open', r));
-    const denied = next(late); late.send(JSON.stringify({ relay_version: 1, op: 'join' })); assert.equal((await denied).code, 'ROOM_UNAVAILABLE');
-    const interrupted = next(host); guest.close(); assert.equal((await interrupted).op, 'closed');
+    const admitted = next(late), candidateJoined = next(host); late.send(JSON.stringify({ relay_version: 1, op: 'join' }));
+    const candidate = await admitted; assert.equal(candidate.op, 'admitted'); assert.equal((await candidateJoined).peer, candidate.peer);
+    const seats = next(late); host.send(JSON.stringify({ relay_version: 1, op: 'send', peer: candidate.peer, payload: 'public seats' })); assert.equal((await seats).payload, 'public seats');
+    const disconnected = next(host); guest.close(); assert.equal((await disconnected).op, 'left');
+    const stillHosted = next(late); host.send(JSON.stringify({ relay_version: 1, op: 'send', peer: candidate.peer, payload: 'still hosted' })); assert.equal((await stillHosted).payload, 'still hosted');
   });
 }

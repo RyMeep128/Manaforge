@@ -52,6 +52,10 @@ public final class GatewaySessionBoundary implements AutoCloseable {
         active();try{String rejection=gate.check(text);if(rejection==null && internal!=null)rejection="COMMAND_PENDING";return ledger.prepare(text,rejection);}
         catch(IOException | RuntimeException error){stop(State.FAULTED);throw error;}
     }
+    /** Lifecycle pause rejects new work while retaining historical command outcomes. */
+    public synchronized JsonObject rejectPaused(String text) throws IOException {
+        active();gate.check(text);return ledger.prepare(text,"COMMAND_PENDING").receipt();
+    }
     /** Trusted owner only. Native validation is still required; this is current binding, not legality. */
     public synchronized boolean matchesInternalDecision(String session,String viewer,long revision,String decision) {
         return !dispatching && state==State.ACTIVE && gate.matchesDecision(session,viewer,revision,decision);

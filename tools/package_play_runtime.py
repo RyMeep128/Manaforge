@@ -66,7 +66,7 @@ def package(engine, unity, jdk, output, component_version, compatible_versions):
     classes = target / "bridge/classes"
     classes.mkdir(parents=True)
     server = target / "xmage/mage-server"
-    classpath = os.pathsep.join((str(server / "lib/*"), str(server / "plugins/mage-player-human-1.4.62.jar")))
+    classpath = os.pathsep.join((str(server / "lib/*"), str(server / "plugins/*")))
     subprocess.run([str(jdk / "bin/javac.exe"), "--release", "8", "-encoding", "UTF-8",
                     "-cp", classpath, "-d", str(classes), *map(str, sources)], check=True)
     files = inventory(target)

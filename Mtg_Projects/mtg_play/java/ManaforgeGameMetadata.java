@@ -16,6 +16,25 @@ import org.jboss.remoting.transport.Connector;
  * The human response monitor keeps the engine game thread paused during the read.
  */
 public final class ManaforgeGameMetadata {
+    private static final Map<UUID,Object[]> recoveryIdle=new HashMap<>();
+    /** Trusted stdin lifecycle control, separate from the read-only viewer metadata endpoint. */
+    public static synchronized JsonObject recovery(JsonObject command) throws Exception {
+        UUID gameId=UUID.fromString(command.get("game").getAsString());String action=command.get("action").getAsString();
+        UUID seat=command.has("seat")?UUID.fromString(command.get("seat").getAsString()):null;
+        GameController controller=managers().gameManager().getGameController().get(gameId);
+        if(controller!=null && action.equals("pause")){
+            if(!recoveryIdle.containsKey(gameId))recoveryIdle.put(gameId,new Object[]{field(controller,GameController.class,"useResponseIdleTimeout"),field(controller,GameController.class,"responseIdleTimeoutPlayerId")});
+            Field enabled=GameController.class.getDeclaredField("useResponseIdleTimeout");enabled.setAccessible(true);enabled.setBoolean(controller,false);
+            java.lang.reflect.Method stop=GameController.class.getDeclaredMethod("stopResponseIdleTimeout");stop.setAccessible(true);stop.invoke(controller);
+        }
+        if(controller!=null && action.equals("resume") && recoveryIdle.containsKey(gameId)){
+            if(!manaforge.payment.xmage.NativeMatchRecovery.control(gameId,"status",seat).get("ready").getAsBoolean())throw new IllegalStateException("RECOVERY_NOT_READY");
+            Object[] saved=recoveryIdle.remove(gameId);Field enabled=GameController.class.getDeclaredField("useResponseIdleTimeout");enabled.setAccessible(true);enabled.set(controller,saved[0]);
+            UUID waiting=(UUID)saved[1];Game game=(Game)field(controller,GameController.class,"game");if(game.getState().getChoosingPlayerId()!=null)waiting=game.getState().getChoosingPlayerId();
+            if(waiting!=null){java.lang.reflect.Method start=GameController.class.getDeclaredMethod("startResponseIdleTimeout",UUID.class);start.setAccessible(true);start.invoke(controller,waiting);}
+        }
+        return manaforge.payment.xmage.NativeMatchRecovery.control(gameId,action,seat);
+    }
     // Retain only bounded authorized game references so monotonic terminal flags survive controller removal.
     private static final Map<UUID,Game> recentGames=Collections.synchronizedMap(new LinkedHashMap<UUID,Game>() {
         protected boolean removeEldestEntry(Map.Entry<UUID,Game> eldest){return size()>32;}
@@ -119,8 +138,8 @@ public final class ManaforgeGameMetadata {
             Object human = player.getRealPlayer();
             Class<?> type = human.getClass();
             boolean paymentProbe=type.getName().equals("manaforge.payment.xmage.ContextHumanPlayer");
-            Class<?> humanType=paymentProbe?type.getSuperclass():type;
-            if (!humanType.getName().equals("mage.player.human.HumanPlayer")) continue;
+            Class<?> humanType=type;while(humanType!=null && !humanType.getName().equals("mage.player.human.HumanPlayer"))humanType=humanType.getSuperclass();
+            if (humanType==null) continue;
             Object response = field(human, humanType, "response");
             synchronized (response) {
                 if (!Boolean.TRUE.equals(field(human, humanType, "responseOpenedForAnswer"))) continue;

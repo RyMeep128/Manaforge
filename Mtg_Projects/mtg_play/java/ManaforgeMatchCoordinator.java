@@ -51,6 +51,14 @@ public final class ManaforgeMatchCoordinator implements AutoCloseable {
         });
     }
     public enum Status { REGISTERED, WAITING, AUTHENTICATING, CONNECTED, DISCONNECTED, CLOSED }
+    /** Trusted match owner only. An earlier connection can never authenticate after rotation. */
+    public void rotateViewerKey(String seat,byte[] replacement) throws Exception {
+        if(replacement==null || replacement.length!=32)throw new IllegalArgumentException("COORDINATOR_KEY");
+        invoke(()->{Channel channel=channels.get(seat);require(channel!=null,"COORDINATOR_VIEWER");
+            synchronized(channel){if(channel.connection!=null)disconnect(channel,channel.connection,"SEAT_REASSIGNED");Arrays.fill(channel.key,(byte)0);System.arraycopy(replacement,0,channel.key,0,32);channel.receipts.clear();}
+            return null;
+        });
+    }
     public static final class Viewer {
         public final String seat,nativePlayer,session,viewer;public final int port;
         private Viewer(String seat,String nativePlayer,String session,String viewer,int port){this.seat=seat;this.nativePlayer=nativePlayer;this.session=session;this.viewer=viewer;this.port=port;}

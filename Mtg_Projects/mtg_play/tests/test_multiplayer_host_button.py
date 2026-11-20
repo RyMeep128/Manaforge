@@ -34,7 +34,7 @@ def test_host_button_survives_qt_events_and_receives_join_code(tmp_path, failure
             def receive(raw):
                 message = json.loads(raw)
                 if message.get('relay_version') == 1 and message.get('op') == 'create':
-                    peer.sendTextMessage(json.dumps({{'relay_version': 1, 'op': 'admitted', 'peer': 'host'}}))
+                    peer.sendTextMessage(json.dumps({{'relay_version': 1, 'op': 'admitted', 'peer': 'host', 'recovery_version': 1}}))
             peer.textMessageReceived.connect(receive)
         server.newConnection.connect(connected)
 

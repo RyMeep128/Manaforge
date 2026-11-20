@@ -123,6 +123,11 @@ public final class MatchCoordinatorChecks {
                 body.addProperty("session_id",a.session);body.addProperty("viewer_id",a.viewer);body.addProperty("command_id","command");body.addProperty("request_revision",1);body.addProperty("outcome","submitted");body.add("code",JsonNull.INSTANCE);ack.add("body",body);
                 coordinator.sendGameplay("a",ack);check(WireMessages.parse(TextFrame.read(ca.socket.getInputStream())).getAsJsonObject("body").get("outcome").getAsString().equals("submitted"),"GAMEPLAY_RECEIPT_WITHOUT_SNAPSHOT");
                 ca.close();await(disconnected::get,"GAMEPLAY_DISCONNECT_CALLBACK");
+                byte[] replacement=key(33);coordinator.rotateViewerKey("a",replacement);
+                rejects(()->new Client(a,keyA,true),"REVOKED_VIEWER_KEY_ACCEPTED");
+                await(()->coordinator.status("a").status==ManaforgeMatchCoordinator.Status.DISCONNECTED,"REVOKED_KEY_CLEANUP");
+                try(Client returning=new Client(a,replacement,true)){await(()->coordinator.status("a").status==ManaforgeMatchCoordinator.Status.CONNECTED,"REPLACEMENT_KEY_REJECTED");}
+                Arrays.fill(replacement,(byte)0);
             }
         }
         Arrays.fill(keyA,(byte)0);Arrays.fill(keyB,(byte)0);

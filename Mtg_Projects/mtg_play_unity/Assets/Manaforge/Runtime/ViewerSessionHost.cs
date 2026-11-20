@@ -21,6 +21,8 @@ namespace Manaforge.Play
         private readonly CancellationToken token;private readonly TaskCompletionSource<ViewerHostStop> completion=new TaskCompletionSource<ViewerHostStop>(TaskCreationOptions.RunContinuationsAsynchronously);
         private ViewerSessionReceiver receiver;private ClientSessionChannel channel;private CoreArtworkBundle artwork;private ViewerArtworkJobs artworkJobs;private ViewerCommandDispatcher commands;
         private bool stopped,disposed;private string stopCode;
+        private volatile bool matchPaused;
+        public bool MatchPaused {get=>matchPaused;set=>matchPaused=value;}
         public Task<ViewerHostStop> Completion=>completion.Task;
         public ProjectedOrganizationFrame OrganizationFor(long revision){lock(gate)return stopped?null:channel?.Organization.ForRevision(revision);}
         public int OrganizationVersion {get{lock(gate)return channel?.Organization.Version??0;}}
@@ -29,7 +31,7 @@ namespace Manaforge.Play
         public Task<bool> OrganizeAsync(ProjectedOrganizationFrame frame,Newtonsoft.Json.Linq.JObject operation){ThreadOnly();if(frame==null || !surface.HasPresentedFrame(ticket,frame.GameplayRevision))return Task.FromResult(false);lock(gate)return stopped || channel==null?Task.FromResult(false):channel.Organization.Submit(frame,operation);}
         public bool Authenticated {get{lock(gate)return !stopped && channel!=null;}}
         public ViewerDecisionOffer CurrentDecision
-        {get{if(ownerEnded.IsCompleted)Stop("VIEWER_OWNER_ENDED");lock(gate)return !stopped && receiver!=null?receiver.Decisions.Current:null;}}
+        {get{if(ownerEnded.IsCompleted)Stop("VIEWER_OWNER_ENDED");lock(gate)return !stopped && !matchPaused && receiver!=null?receiver.Decisions.Current:null;}}
         // Bootstrap ownership transfers only after BeginViewer succeeds. Parent owns its pipe/lifeline task.
         public ViewerSessionHost(ViewerCardSurface surface,ViewerBootstrap ownedBootstrap,Task ownerEnded,bool fixtureMode=false,int connectionMilliseconds=5000,int readMilliseconds=60000,bool allowIdleWait=false)
         {
@@ -76,14 +78,15 @@ namespace Manaforge.Play
         }
         private Task<TrackedCommand> Dispatch(Func<ViewerCommandDispatcher,Task<TrackedCommand>> send)
         {
+            if(matchPaused)return Task.FromException<TrackedCommand>(new WireEnvelope.EnvelopeException("MATCH_PAUSED"));
             if(ownerEnded.IsCompleted)Stop("VIEWER_OWNER_ENDED");ViewerCommandDispatcher target;lock(gate)target=stopped?null:commands;
             if(ticket.Mailbox.HasPendingReveals)return Task.FromException<TrackedCommand>(new WireEnvelope.EnvelopeException("REVEAL_ACK_REQUIRED"));
             return target==null?Task.FromException<TrackedCommand>(new WireEnvelope.EnvelopeException("SESSION_STOPPED")):send(target);
         }
-        public bool CanConcede {get{lock(gate)return !stopped && channel?.CanConcede==true;}}
+        public bool CanConcede {get{lock(gate)return !stopped && !matchPaused && channel?.CanConcede==true;}}
         public TrackedCommand ConcessionReceipt(string id){lock(gate)return channel?.FindCommand(id);}
         public Task<TrackedCommand> ConcedeAsync(CancellationToken cancellation=default)
-        {ViewerCommandDispatcher target;lock(gate)target=stopped?null:commands;return target==null?Task.FromException<TrackedCommand>(new WireEnvelope.EnvelopeException("SESSION_STOPPED")):target.ConcedeAsync(cancellation);}
+        {ViewerCommandDispatcher target;lock(gate)target=stopped || matchPaused?null:commands;return target==null?Task.FromException<TrackedCommand>(new WireEnvelope.EnvelopeException("SESSION_STOPPED")):target.ConcedeAsync(cancellation);}
         public Task<TrackedCommand> PerformAsync(ViewerDecisionOffer offer,ProjectedAction action,CancellationToken cancellation=default)=>Dispatch(target=>target.PerformAsync(offer,action,cancellation));
         public Task<TrackedCommand> ChooseAsync(ViewerDecisionOffer offer,ProjectedChoiceOption option,CancellationToken cancellation=default)=>Dispatch(target=>target.ChooseAsync(offer,option,cancellation));
         public Task<TrackedCommand> FinishSelectionAsync(ViewerDecisionOffer offer,CancellationToken cancellation=default)=>Dispatch(target=>target.FinishSelectionAsync(offer,cancellation));

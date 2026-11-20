@@ -25,6 +25,7 @@ namespace Manaforge.Play
         private Task<TrackedCommand> pending;
         private string commandId;
         public bool IsOpen {get;private set;}
+        public Func<bool> MatchPaused {get;set;}
         public VisualElement OptionsContent {get;}
         public GameplayMenuOverlay(VisualElement root,Func<bool> canConcede,Func<Task<TrackedCommand>> send,Func<string,TrackedCommand> receipt,Action interrupt=null,Action returnToManaforge=null)
         {
@@ -62,7 +63,7 @@ namespace Manaforge.Play
         private static Button MakeButton(string name,string text,Action action){var button=new Button(action){name=name,text=text};GameplayTheme.Button(button);return button;}
         private bool Inside(object target)=>target is VisualElement element && (element==shade || shade.Contains(element));
         private void Block<T>(T ev) where T:EventBase<T>,new(){if(IsOpen && !Inside(ev.target))ev.StopImmediatePropagation();}
-        private void NavigationCancel(NavigationCancelEvent ev){if(IsOpen){if(!held && lastCancelFrame!=Time.frameCount){lastCancelFrame=Time.frameCount;Back();}ev.StopImmediatePropagation();}}
+        private void NavigationCancel(NavigationCancelEvent ev){if(MatchPaused?.Invoke()==true)return;if(IsOpen){if(!held && lastCancelFrame!=Time.frameCount){lastCancelFrame=Time.frameCount;Back();}ev.StopImmediatePropagation();}}
         private void Focus(FocusInEvent ev){if(IsOpen && !Inside(ev.target)){ev.StopImmediatePropagation();DefaultFocus();}}
         private void DefaultFocus(){if(page==0)resume.Focus();else if(page==2)cancel.Focus();else if(page==3)cancelReset.Focus();else options.Q<Button>()?.Focus();}
         public void SetOrganizationTools(Func<bool> open,Func<bool> dismiss=null){dismissOrganization=dismiss;main.Add(MakeButton("game-menu-groups","Battlefield arrangement",()=>{Close();open();}));}
@@ -74,7 +75,7 @@ namespace Manaforge.Play
         }
         public void Open()
         {
-            if(disposed || IsOpen || layoutEditor?.IsEditing==true)return;returnFocus=root.panel?.focusController.focusedElement as VisualElement;
+            if(disposed || IsOpen || MatchPaused?.Invoke()==true || layoutEditor?.IsEditing==true)return;returnFocus=root.panel?.focusController.focusedElement as VisualElement;
             IsOpen=true;interrupt?.Invoke();shade.style.display=DisplayStyle.Flex;shade.BringToFront();Navigate(0);Tick();
         }
         public void Close()
@@ -90,6 +91,7 @@ namespace Manaforge.Play
         private void Back(){if(page==0)Close();else Navigate(0);}
         private void Down(KeyDownEvent ev)
         {
+            if(MatchPaused?.Invoke()==true)return;
             if(ev.keyCode==KeyCode.F11)return;
             if(ev.keyCode==KeyCode.Escape){if(!held){held=true;if(lastCancelFrame!=Time.frameCount){lastCancelFrame=Time.frameCount;if(IsOpen)Back();else if(dismissOrganization?.Invoke()!=true)Open();}}ev.StopImmediatePropagation();return;}
             if(!IsOpen)return;

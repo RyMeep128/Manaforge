@@ -3,10 +3,11 @@
 from copy import deepcopy
 import os
 import threading
+import uuid
 from PyQt6 import QtCore as C, QtWidgets as W
 from mtg_ui.jobs import JobQueue
 from .contracts import GameSetup, MatchSeat, ADAPTER_VERSION
-from .live_game import LiveGameLaunch, run_live_game
+from .live_game import LiveGameLaunch
 from .multiplayer import (
     MultiplayerLobby,
     SHARED_RELAY_URL,
@@ -19,6 +20,7 @@ from .multiplayer import (
 )
 from .relay_client import RelayClient, LoopbackTunnel
 from .multiplayer_runtime import run_host_game, run_guest_game
+from .recovery import RecoveryMailbox
 
 
 class MultiplayerPanel(W.QWidget):
@@ -41,12 +43,19 @@ class MultiplayerPanel(W.QWidget):
         self.failure_code = None
         self.admitted = False
         self.remote_finished = threading.Event()
+        self.recovery_mailbox = RecoveryMailbox()
+        self.recovery_state = None
+        self.guest_peer = "guest"
+        self.claim_peer = None
+        self.claim_ticket = None
+        self.waiting_peers = set()
+        self.reconnect_pending = False
         self.jobs = JobQueue(self)
         self.jobs.progress.connect(self._progress)
         self.jobs.status.connect(self._status)
         self.jobs.idle.connect(self.render)
         self.prepare_remote.connect(self._prepare_remote)
-        self.tunnel_failed.connect(self.fail)
+        self.tunnel_failed.connect(self.on_tunnel_failed)
         layout = W.QVBoxLayout(self)
         self.endpoint = W.QLineEdit(
             C.QSettings().value(
@@ -131,6 +140,19 @@ class MultiplayerPanel(W.QWidget):
         self.message.setWordWrap(True)
         self.message.setTextFormat(C.Qt.TextFormat.PlainText)
         layout.addWidget(self.message)
+        self.seat_picker = W.QGroupBox("Join game in progress")
+        picker = W.QVBoxLayout(self.seat_picker)
+        self.seat_details = W.QLabel()
+        self.seat_details.setTextFormat(C.Qt.TextFormat.PlainText)
+        self.seat_details.setWordWrap(True)
+        picker.addWidget(self.seat_details)
+        self.claim_seat = W.QPushButton("Take seat 2")
+        self.claim_seat.clicked.connect(self.claim_active_seat)
+        picker.addWidget(self.claim_seat)
+        layout.addWidget(self.seat_picker)
+        self.reconnect_button = W.QPushButton("Reconnect")
+        self.reconnect_button.clicked.connect(self.reconnect_game)
+        layout.addWidget(self.reconnect_button)
         self.refresh_decks()
         self.render()
 
@@ -179,6 +201,13 @@ class MultiplayerPanel(W.QWidget):
             self.hosting = hosting
             self.started = self.finished = self.admitted = self.normal_result = False
             self.failure_code = None
+            self.recovery_state = None
+            self.claim_peer = None
+            self.claim_ticket = None
+            self.guest_peer = "guest"
+            self.waiting_peers.clear()
+            self.reconnect_pending = False
+            self.recovery_mailbox = RecoveryMailbox()
             self.remote_finished.clear()
             self.model = (
                 MultiplayerLobby(self.workspace.format.currentData())
@@ -220,6 +249,9 @@ class MultiplayerPanel(W.QWidget):
         try:
             op = message.get("op")
             if op == "admitted":
+                if message.get("recovery_version") != 1:
+                    self.fail("RELAY_UPGRADE_REQUIRED")
+                    return
                 self.admitted = True
                 if self.hosting:
                     self.code.setText(self.relay.code)
@@ -236,16 +268,27 @@ class MultiplayerPanel(W.QWidget):
                         ):
                             self.select_deck(i)
             elif op == "joined" and self.hosting:
+                self.waiting_peers.add(message["peer"])
                 if self.started:
-                    raise ValueError("LOBBY_STARTED")
+                    self.send_match(message["peer"])
+                    return
                 if self.model.seats[1].kind != "open":
                     self.relay.send({"op": "kick"})
                 else:
                     self.model.join()
                     self.send_lobby()
             elif op == "left" and self.hosting:
+                self.waiting_peers.discard(message["peer"])
                 if self.started:
-                    self.fail("GAME_INTERRUPTED")
+                    peer = message["peer"]
+                    self.waiting_peers.discard(peer)
+                    if peer == self.guest_peer or peer == self.claim_peer:
+                        self.claim_peer = None
+                        self.claim_ticket = None
+                        if self.tunnel:
+                            self.tunnel.close()
+                            self.tunnel = None
+                        self.recovery_mailbox.send("disconnect")
                     return
                 if self.model.seats[1].kind == "human":
                     self.model.leave()
@@ -253,9 +296,42 @@ class MultiplayerPanel(W.QWidget):
             elif op == "message":
                 payload = message.get("payload")
                 if not isinstance(payload, dict):
+                    if self.hosting and self.started:
+                        self.relay.send({"op": "kick", "peer": message.get("peer")})
+                        return
                     raise ValueError("INVALID_MESSAGE")
                 kind = payload.get("type")
-                if kind == "frame" and self.tunnel:
+                peer = message.get("peer", "guest")
+                if self.hosting and self.started and peer != self.guest_peer and kind != "claim_seat":
+                    self.relay.send({"op": "kick", "peer": peer})
+                    return
+                if kind == "claim_seat" and self.hosting and self.started:
+                    from mtg_proxy.constants import APP_VERSION
+                    if (payload.get("version") != APP_VERSION or payload.get("adapter") != ADAPTER_VERSION):
+                        self.relay.payload({"type": "claim_rejected", "reason": "Both players need the same Manaforge version."}, peer)
+                    elif payload.get("seat_id") != self.model.seats[1].seat_id or self.claim_peer or not (self.recovery_state or {}).get("claimable"):
+                        self.relay.payload({"type": "claim_rejected", "reason": "That seat is no longer available."}, peer)
+                    else:
+                        self.claim_peer = peer
+                        self.claim_ticket = uuid.uuid4().hex
+                        self.recovery_mailbox.send({"action": "claim", "ticket": self.claim_ticket})
+                    return
+                elif kind == "match" and not self.hosting:
+                    self.recovery_state = payload["recovery"]
+                    root = self.launch.root if self.launch else None
+                    if root:
+                        from .recovery import atomic_json
+                        try:
+                            atomic_json(root / "recovery-state.json", self.recovery_state)
+                        except OSError:
+                            pass  # The departing Unity process may already have finished cleanup.
+                    self.render()
+                    return
+                elif kind == "claim_rejected" and not self.hosting:
+                    self.message.setText(payload.get("reason", "Seat unavailable."))
+                    self.claim_seat.setEnabled(True)
+                    return
+                elif kind == "frame" and self.tunnel and (not self.hosting or peer == self.guest_peer):
                     self.tunnel.feed(payload)
                 elif (
                     kind == "tunnel_open"
@@ -263,9 +339,10 @@ class MultiplayerPanel(W.QWidget):
                     and self.started
                     and self.target_port
                     and self.tunnel is None
+                    and peer == self.guest_peer
                 ):
                     self.tunnel = LoopbackTunnel(
-                        self.relay.payload,
+                        lambda value, target=peer: self.relay.payload(value, target),
                         self.tunnel_failed.emit,
                         target_port=self.target_port,
                     )
@@ -323,11 +400,14 @@ class MultiplayerPanel(W.QWidget):
                 elif (
                     kind == "prepare"
                     and not self.hosting
-                    and not self.started
-                    and self.view
-                    and self.view["seats"][1].get("ready")
+                    and not self.busy
                 ):
                     self.start_guest(payload)
+                elif kind == "recovery_ended" and not self.hosting:
+                    if self.launch and self.launch.root:
+                        from .recovery import atomic_json
+                        atomic_json(self.launch.root / "recovery-state.json", {"ended": True})
+                    self.message.setText("The host ended the game without a winner.")
                 elif kind == "finished":
                     # Let Unity consume the result and finish its private cleanup before closing transport.
                     self.message.setText(
@@ -338,6 +418,9 @@ class MultiplayerPanel(W.QWidget):
                     raise ValueError("MESSAGE_UNSUPPORTED")
             self.render()
         except (ValueError, TypeError, KeyError, IndexError):
+            if self.hosting and self.started and message.get("op") == "message":
+                self.relay.send({"op": "kick", "peer": message.get("peer")})
+                return
             self.fail("LOBBY_MESSAGE_REJECTED")
 
     def change_kind(self, index):
@@ -446,21 +529,7 @@ class MultiplayerPanel(W.QWidget):
         modes = tuple(s.payment for s in self.model.seats)
         self.launch = LiveGameLaunch()
         launch = self.launch
-        ai_opponent = self.model.seats[1].kind == "ai"
-
         def work(cancel, report):
-            if ai_opponent:
-                return run_live_game(
-                    setup,
-                    documents,
-                    cancel,
-                    report,
-                    version=APP_VERSION,
-                    launch=launch,
-                    payment_mode=modes[0],
-                    organization_drawers=True,
-                    organization_free_placement=True,
-                )
             return run_host_game(
                 setup,
                 documents,
@@ -471,6 +540,7 @@ class MultiplayerPanel(W.QWidget):
                 payment_modes=modes,
                 remote_prepare=self.prepare_remote.emit,
                 remote_finished=self.remote_finished,
+                recovery_mailbox=self.recovery_mailbox,
             )
 
         self.jobs.submit(work, quiet=True)
@@ -479,11 +549,28 @@ class MultiplayerPanel(W.QWidget):
     @C.pyqtSlot(object, int)
     def _prepare_remote(self, payload, port):
         if self.relay and not self.relay.closed and self.started:
+            if payload.get("claim_ticket") and (not self.claim_peer or payload["claim_ticket"] != self.claim_ticket):
+                self.recovery_mailbox.send("disconnect")
+                return
+            if self.claim_peer:
+                previous = self.guest_peer
+                self.guest_peer = self.claim_peer
+                self.claim_peer = None
+                self.claim_ticket = None
+                if previous != self.guest_peer and previous in self.waiting_peers:
+                    self.relay.send({"op": "kick", "peer": previous})
+                if self.tunnel:
+                    self.tunnel.close()
+                    self.tunnel = None
             self.target_port = port
-            self.relay.payload(payload)
+            self.relay.payload(payload, self.guest_peer)
 
     def start_guest(self, payload):
         self.started = True
+        self.finished = self.reconnect_pending = False
+        self.failure_code = None
+        if self.tunnel:
+            self.tunnel.close()
         self.tunnel = LoopbackTunnel(self.relay.payload, self.tunnel_failed.emit)
         self.launch = launch = LiveGameLaunch()
         self.jobs.submit(
@@ -493,8 +580,45 @@ class MultiplayerPanel(W.QWidget):
             quiet=True,
         )
 
+    def send_match(self, peer):
+        if self.relay and self.recovery_state:
+            self.relay.payload({"type": "match", "recovery": self.recovery_state}, peer)
+
+    def claim_active_seat(self):
+        if self.relay and not self.relay.closed and self.recovery_state:
+            from mtg_proxy.constants import APP_VERSION
+            self.relay.payload({"type": "claim_seat", "seat_id": "two",
+                                "version": APP_VERSION, "adapter": ADAPTER_VERSION})
+            self.claim_seat.setEnabled(False)
+            self.message.setText("Connecting to the selected seat…")
+
+    def reconnect_game(self):
+        if self.busy:
+            return
+        if self.relay and not self.relay.closed:
+            self.reconnect_pending = False
+            self.render()
+        else:
+            self.connect_room(False)
+
     def render(self):
         active = self.relay is not None and not self.relay.closed
+        recovery = self.recovery_state or {}
+        self.seat_picker.setVisible(bool(not self.hosting and recovery and not self.busy and not self.reconnect_pending))
+        lines = []
+        for index, seat in enumerate(recovery.get("seats", [])):
+            state = "Connected host" if index == 0 else "AI · Hardest" if recovery.get("controller") == "ai" else "Connected" if recovery.get("connected") else "Disconnected"
+            details = f"Seat {index + 1}: {seat['name']} · {state}"
+            if seat.get("life") is not None:
+                details += f" · {seat['life']} life"
+            if seat.get("commanders"):
+                details += " · " + ", ".join(seat["commanders"])
+            lines.append(details)
+        self.seat_details.setText("\n".join(lines))
+        self.claim_seat.setEnabled(bool(active and recovery.get("claimable")))
+        self.claim_seat.setText("Rejoin seat 2" if self.started and recovery.get("controller") == "human" else "Take seat 2")
+        self.reconnect_button.setVisible(bool(self.reconnect_pending and not self.hosting))
+        self.reconnect_button.setEnabled(not self.busy)
         for button in (self.host, self.join):
             button.setEnabled(not active and not self.busy and not self.started)
         self.endpoint.setEnabled(not active and not self.busy)
@@ -580,6 +704,16 @@ class MultiplayerPanel(W.QWidget):
         self.workspace.unity_payment_mode.setEnabled(not self.busy and not self.started)
 
     def _progress(self, job, value):
+        if self.started and self.hosting and isinstance(value, dict) and isinstance(value.get("recovery"), dict):
+            self.recovery_state = value["recovery"]
+            if self.claim_peer and (self.recovery_state.get("error") or self.recovery_state.get("finished") or self.recovery_state.get("ended")):
+                self.relay.payload({"type": "claim_rejected", "reason": self.recovery_state.get("error") or "This game has ended."}, self.claim_peer)
+                self.claim_peer = None
+                self.claim_ticket = None
+            if self.relay and not self.relay.closed:
+                for peer in self.waiting_peers:
+                    self.send_match(peer)
+            self.render()
         if isinstance(value, dict) and isinstance(value.get("phase"), str):
             self.message.setText(value["phase"])
 
@@ -589,17 +723,24 @@ class MultiplayerPanel(W.QWidget):
             if self.failure_code is not None:
                 return
             outcome = value.get("outcome") if isinstance(value, dict) else None
+            if (self.recovery_state or {}).get("ended"):
+                self.normal_result = True
+                self.message.setText("The host ended the game without a winner. Leave to set up another game.")
+                self.render()
+                return
             self.normal_result = outcome in ("win", "loss", "draw")
             if not self.normal_result:
+                if not self.hosting and self.started:
+                    self.connection_lost()
+                    return
                 self.fail("GAME_INTERRUPTED")
                 return
             if (
                 self.relay
                 and not self.relay.closed
-                and self.view
-                and all(s["kind"] == "human" for s in self.view["seats"])
+                and (not self.hosting or (self.recovery_state or {}).get("controller") == "human")
             ):
-                self.relay.payload({"type": "finished"})
+                self.relay.payload({"type": "finished"}, self.guest_peer if self.hosting else None)
             self.message.setText(
                 "Game result: " + outcome
                 if outcome in ("win", "loss", "draw")
@@ -608,8 +749,34 @@ class MultiplayerPanel(W.QWidget):
             self.render()
 
     @C.pyqtSlot(str)
+    def on_tunnel_failed(self, code):
+        if self.tunnel is None or self.tunnel.failure_code != code:
+            return
+        if self.normal_result or (self.recovery_state or {}).get("ended"):
+            return
+        if self.hosting and self.started:
+            if self.tunnel:
+                self.tunnel.close()
+                self.tunnel = None
+            self.recovery_mailbox.send("disconnect")
+        else:
+            self.fail(code)
+
+    def connection_lost(self):
+        self.reconnect_pending = True
+        if self.tunnel:
+            self.tunnel.close()
+            self.tunnel = None
+        self.message.setText("Connection lost. Reconnect to choose an available seat, or Leave Lobby.")
+        self.render()
+
+    @C.pyqtSlot(str)
     def fail(self, code):
         if self.normal_result or self.failure_code is not None:
+            return
+        if not self.hosting and self.started:
+            self.connection_lost()
+            self.jobs.cancel_all()
             return
         # Cancellation can synchronously report SESSION_EOF. Retain the cause
         # that prompted cleanup rather than replacing it with GAME_INTERRUPTED.
@@ -624,6 +791,7 @@ class MultiplayerPanel(W.QWidget):
         self.message.setText(
             {
                 "INCOMPATIBLE_VERSION": "Both players need the same Manaforge version.",
+                "RELAY_UPGRADE_REQUIRED": "This relay needs the reconnect update. Use an updated relay to host or join a game.",
                 "RELAY_CERTIFICATE_FAILED": "The relay's TLS certificate could not be verified.",
                 "ROOM_UNAVAILABLE": "That room is full, expired, or already playing.",
             }.get(
@@ -649,6 +817,12 @@ class MultiplayerPanel(W.QWidget):
         self.target_port = None
         self.started = self.finished = self.normal_result = False
         self.failure_code = None
+        self.recovery_state = None
+        self.claim_peer = None
+        self.claim_ticket = None
+        self.guest_peer = "guest"
+        self.waiting_peers.clear()
+        self.reconnect_pending = False
         self.message.setText("Host a game or enter a friend's invitation.")
         self.render()
 

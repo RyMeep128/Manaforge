@@ -29,7 +29,8 @@ public final class ManaforgeLiveOpening {
     private final ManaforgeBridge bridge = new ManaforgeBridge(event -> { if(!events.offer(event))overflow.set(true);multiplayerWake.signal(); });
     private final NativeOrganizationBridge.MetadataCache multiplayerOrganizationMetadata=new NativeOrganizationBridge.MetadataCache();
     private final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(Boolean.getBoolean("manaforge.liveGame")?21600:Boolean.getBoolean("manaforge.loopTurn")?420:Boolean.getBoolean("manaforge.finishAttacks")?240:Boolean.getBoolean("manaforge.postResolutionPass")?240:Boolean.getBoolean("manaforge.continuePriority")?180:90);
-    private JsonObject state, pending;
+    private volatile JsonObject state;
+    private JsonObject pending;
     private String engineViewer, artifactHash;
     private boolean firstLand,landObserved,unityPriorityPass,firstCreature,castAbilityMatched;
     private byte[] unityKey;private java.nio.file.Path unityReady;
@@ -44,7 +45,7 @@ public final class ManaforgeLiveOpening {
     private final boolean combatTrigger=Boolean.getBoolean("manaforge.combatTrigger");private boolean combatTriggerObserved;
     private final String combatSpell=System.getProperty("manaforge.combatSpell","");private String spellTarget;private long spellTargetIncarnation=-1,spellBuffTurn=-1;private boolean spellEffectObserved,spellCycleObserved;
     private final boolean coreFromOpening=Boolean.getBoolean("manaforge.coreFromOpening");private boolean humanBlockSubmitted,humanBlockCombatObserved,humanBlockAssignmentObserved;
-    private final boolean completeGame=Boolean.getBoolean("manaforge.completeGame");private String nativeOutcome;private JsonObject terminalCallback;
+    private final boolean completeGame=Boolean.getBoolean("manaforge.completeGame");private String nativeOutcome;private volatile JsonObject terminalCallback;
     private final boolean coreCombat=Boolean.getBoolean("manaforge.coreCombat");private boolean coreCombatObserved;private int coreMaximumAttackers;
     private final int playRounds=Integer.getInteger("manaforge.playRounds",0);private int completedPlayRounds;private String secondCreatureSource;
     private final boolean repeatCycle=Boolean.getBoolean("manaforge.repeatCycle");private boolean repeatCycleRunning,repeatCasting,nextCreatureResolved,repeatedCombatObserved,repeatedTurnObserved;
@@ -834,9 +835,12 @@ public final class ManaforgeLiveOpening {
             for(ManaforgeLiveOpening p:peers){p.bridge.setSessionWakeup(p.multiplayerWake::signal);String id=p.liveLaunch.viewer();inputs.put(id,new ArrayBlockingQueue<>(32));contexts.put(id,new ArrayBlockingQueue<>(1));ManaforgeMatchCoordinator.Viewer v=host.register(id,p.engineViewer,p.liveLaunch.session(),id,p.unityKey,true);registrations.put(id,v);JsonObject address=new JsonObject();address.addProperty("port",v.port);address.addProperty("session_id",v.session);address.addProperty("viewer_id",v.viewer);addresses.add(address);}
             host.installExtension(sender->new NativeOrganizationBridge(UUID.fromString(peers[0].game),registrations,sender,4));
             host.installGameplay(new ManaforgeMatchCoordinator.Gameplay(){
-                public void connected(String id,manaforge.protocol.GatewayHandshake.ViewerContext context) throws Exception {if(!contexts.get(id).offer(context))throw new IOException("RECONNECT_UNAVAILABLE");}
+                public void connected(String id,manaforge.protocol.GatewayHandshake.ViewerContext context) throws Exception {contexts.get(id).clear();contexts.get(id).offer(context);for(ManaforgeLiveOpening p:peers)if(p.liveLaunch.viewer().equals(id))p.multiplayerWake.signal();}
                 public void receive(String id,String wire) throws Exception {if(!inputs.get(id).offer(wire))throw new IOException("GAMEPLAY_INPUT_OVERFLOW");for(ManaforgeLiveOpening p:peers)if(p.liveLaunch.viewer().equals(id))p.multiplayerWake.signal();}
-                public void disconnected(String id){if(!peers[0].cancelled.get() && !peers[1].cancelled.get())multiplayerFailure(peers,failureRoot,new IOException("MULTIPLAYER_"+host.status(id).reason));for(ManaforgeLiveOpening p:peers){p.cancelled.set(true);p.multiplayerWake.signal();}}
+                public void disconnected(String id){
+                    if(id.equals(peers[0].liveLaunch.viewer()) && peers[0].terminalCallback==null && !peers[0].recoveryEnding){for(ManaforgeLiveOpening p:peers){p.cancelled.set(true);p.multiplayerWake.signal();}}
+                    else for(ManaforgeLiveOpening p:peers)p.multiplayerWake.signal();
+                }
             });host.start();
             for(int i=0;i<2;i++){
                 final int index=i;ManaforgeLiveOpening p=peers[i];
@@ -847,7 +851,27 @@ public final class ManaforgeLiveOpening {
             }
             JsonObject ready=new JsonObject();ready.add("seats",addresses);java.nio.file.Files.write(java.nio.file.Paths.get(args[2]),ready.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8),java.nio.file.StandardOpenOption.CREATE_NEW);
             Thread lifeline=new Thread(()->{try{while(System.in.read()!=-1){}}catch(IOException ignored){}for(ManaforgeLiveOpening p:peers)p.cancelled.set(true);},"multiplayer-owner");lifeline.setDaemon(true);lifeline.start();
-            while(!peers[0].cancelled.get() && !peers[1].cancelled.get())Thread.sleep(50);
+            while(!peers[0].cancelled.get() && !peers[1].cancelled.get()){
+                java.nio.file.Path control=root.resolve("recovery-gateway-command.json");
+                if(java.nio.file.Files.isRegularFile(control)){
+                    JsonObject command=manaforge.protocol.WireEnvelope.parseObject(new String(java.nio.file.Files.readAllBytes(control),java.nio.charset.StandardCharsets.UTF_8));
+                    String action=command.get("action").getAsString();
+                    if(action.equals("rotate")){
+                        String hex=command.get("key").getAsString();if(!hex.matches("[0-9a-f]{64}"))throw new IOException("RECOVERY_KEY_INVALID");
+                        byte[] replacement=new byte[32];for(int j=0;j<32;j++)replacement[j]=(byte)Integer.parseInt(hex.substring(j*2,j*2+2),16);
+                        host.rotateViewerKey(peers[1].liveLaunch.viewer(),replacement);Arrays.fill(replacement,(byte)0);inputs.get(peers[1].liveLaunch.viewer()).clear();
+                    }else if(action.equals("pause")){for(ManaforgeLiveOpening p:peers){p.recoveryPaused=true;p.recoveryHide=true;p.multiplayerWake.signal();}}
+                    else if(action.equals("resume")){for(ManaforgeLiveOpening p:peers){p.recoveryRefresh=true;p.recoveryPaused=false;p.multiplayerWake.signal();}}
+                    else if(action.equals("ai") || action.equals("human")){boolean ai=action.equals("ai");peers[1].recoveryReset=peers[1].recoveryAI!=ai;peers[1].recoveryAI=ai;peers[1].multiplayerWake.signal();}
+                    else if(action.equals("end")){for(ManaforgeLiveOpening p:peers)p.recoveryEnding=true;}
+                    else throw new IOException("RECOVERY_ACTION_INVALID");
+                    java.nio.file.Files.delete(control);
+                }
+                JsonObject status=new JsonObject();status.addProperty("game",peers[0].game);status.addProperty("guest_native_id",peers[1].engineViewer);status.addProperty("connected",host.status(peers[1].liveLaunch.viewer()).status==ManaforgeMatchCoordinator.Status.CONNECTED);
+                JsonArray publicSeats=new JsonArray();for(ManaforgeLiveOpening p:peers){JsonObject row=new JsonObject();row.addProperty("seat_id",p.liveLaunch.viewer());row.addProperty("name",p.liveLaunch.playerName());row.add("commanders",p.liveLaunch.commanderNames());if(p.state!=null)for(JsonElement item:p.state.getAsJsonArray("players")){JsonObject player=item.getAsJsonObject();if(player.get("id").getAsString().equals(p.engineViewer)){row.add("life",player.get("life"));row.add("left",player.get("left"));}}publicSeats.add(row);}status.add("seats",publicSeats);
+                java.nio.file.Path temporary=root.resolve("recovery-gateway-status.tmp");java.nio.file.Files.write(temporary,status.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));try{java.nio.file.Files.move(temporary,root.resolve("recovery-gateway-status.json"),java.nio.file.StandardCopyOption.REPLACE_EXISTING);}catch(java.nio.file.AccessDeniedException readerBusy){/* Windows reader owns the previous complete status; retry next tick. */}
+                Thread.sleep(50);
+            }
         }catch(Exception failure){multiplayerFailure(peers,failureRoot,failure);System.err.println("MULTIPLAYER_STARTUP_FAILED");}
         finally{
             for(ManaforgeLiveOpening p:peers)p.cancelled.set(true);seats.shutdownNow();
@@ -857,8 +881,14 @@ public final class ManaforgeLiveOpening {
         }
         System.exit(0);
     }
+    private volatile boolean recoveryPaused,recoveryAI,recoveryReset,recoveryHide,recoveryRefresh,recoveryEnding;
     private void multiplayerSeat(ManaforgeMatchCoordinator host,ArrayBlockingQueue<manaforge.protocol.GatewayHandshake.ViewerContext> contexts,ArrayBlockingQueue<String> inputs) throws Exception {
-        manaforge.protocol.GatewayHandshake.ViewerContext context=contexts.poll(120,TimeUnit.SECONDS);if(context==null)throw new IOException("MULTIPLAYER_CLIENT_TIMEOUT");
+        manaforge.protocol.GatewayHandshake.ViewerContext context=null;
+        while(context==null && !cancelled.get()){
+            context=contexts.poll(50,TimeUnit.MILLISECONDS);
+            if(context==null && recoveryAI)while(!events.isEmpty()){next();pending=null;}
+        }
+        if(context==null)return;
         ManaforgeOpeningProjection projection=new ManaforgeOpeningProjection(liveLaunch.session(),liveLaunch.viewer(),engineViewer,liveLaunch.bindings());
         JsonObject waiting=new JsonObject();waiting.addProperty("kind","GAME_ASK");waiting.addProperty("is_priority",false);waiting.addProperty("decision_id",0);waiting.addProperty("message","Waiting for the other player");
         waiting.add("cycle",state.get("cycle"));JsonObject initial=projection.projectCoreCombat(state,waiting,true);initial.add("decision",JsonNull.INSTANCE);initial.add("actions",new JsonArray());projection.invalidateDecision();
@@ -867,6 +897,11 @@ public final class ManaforgeLiveOpening {
             sendMultiplayer(host,projection,envelope);CoreCombatCycle gameplay=new CoreCombatCycle(projection);ManaforgeUnityOpening.TurnOffer turn=null;
             while(!cancelled.get()){
                 long wakeVersion=multiplayerWake.version();
+                contexts.poll(); // Reauthentication preserves this seat's command ledger.
+                if(recoveryReset){recoveryReset=false;turn=null;pending=null;recoveryHide=true;}
+                if(recoveryHide){recoveryHide=false;waiting.add("cycle",state.get("cycle"));JsonObject refreshed=projection.projectCoreCombat(state,waiting,true);refreshed.add("decision",JsonNull.INSTANCE);refreshed.add("actions",new JsonArray());projection.invalidateDecision();JsonObject reset=multiplayerEnvelope(refreshed,false);owner.observe(reset.toString());sendMultiplayer(host,projection,reset);}
+                if(recoveryPaused || recoveryAI){String blocked;while((blocked=inputs.poll())!=null)sendMultiplayer(host,projection,owner.rejectPaused(blocked));if(recoveryAI)while(!events.isEmpty()){next();pending=null;}multiplayerWake.await(wakeVersion,cancelled::get);continue;}
+                if(recoveryRefresh){recoveryRefresh=false;if(turn!=null){JsonObject choice=bridge.currentDecision();if(choice!=null && choice.get("decision_id").getAsLong()==turn.decision){state=bridge.currentState();turn=gameplay.offer(choice);owner.observe(turn.snapshot().toString());sendMultiplayer(host,projection,turn.snapshot());}}}
                 if(turn==null){
                     if(pending==null && events.isEmpty()){
                         String idle=inputs.poll();if(idle==null){multiplayerWake.await(wakeVersion,cancelled::get);continue;}

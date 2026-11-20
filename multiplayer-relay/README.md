@@ -1,6 +1,9 @@
 # Manaforge multiplayer relay
 
-The relay transports private, targeted messages between a host and one guest.
+The relay transports private, targeted messages for a two-player match. Active
+rooms also admit up to two waiting joiners to choose an available seat. Only the
+host supplies their public seat lists and grants a seat; private gameplay frames
+are explicitly targeted to the selected guest and never broadcast.
 XMage and Java run on the hosting computer. The relay never runs gameplay rules,
 loads an engine, or stores decks, snapshots, or match history.
 
@@ -37,7 +40,10 @@ See [current pricing](https://developers.cloudflare.com/durable-objects/platform
 The Worker retains only socket attachments and a cleanup alarm. Lobby admission
 expires after 30 minutes; active rooms close after six hours. Do not log payloads
 or enable paid logging/storage products for this deployment. Deployments and
-infrastructure restarts can close connections; reconnect is not implemented yet.
+infrastructure restarts can close connections. Guest loss preserves the host's
+room and engine, allowing reconnects and AI replacement. Losing the host's relay
+connection still closes the room; there is no host migration. Updated clients
+require the relay's `recovery_version: 1` admission capability.
 
 ## Standalone custom relay
 

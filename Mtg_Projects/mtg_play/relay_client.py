@@ -32,7 +32,7 @@ class RelayClient(C.QObject):
         self.socket.setMaxAllowedIncomingFrameSize(MAX_RELAY)
         self.socket.setMaxAllowedIncomingMessageSize(MAX_RELAY)
         self.socket.connected.connect(
-            lambda: self.send({"op": "create" if hosting else "join"})
+            lambda: self.send({"op": "create" if hosting else "join", "recovery_version": 1})
         )
         self.socket.textMessageReceived.connect(self._receive)
         self.socket.binaryMessageReceived.connect(
@@ -66,8 +66,8 @@ class RelayClient(C.QObject):
             return
         self.socket.sendTextMessage(raw)
 
-    def payload(self, value):
-        self.outgoing.emit({"op": "send", "payload": value})
+    def payload(self, value, peer=None):
+        self.outgoing.emit({"op": "send", "payload": value, **({"peer": peer} if peer else {})})
 
     def _receive(self, raw):
         try:

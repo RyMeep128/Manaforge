@@ -25,6 +25,7 @@ namespace Manaforge.Play
         private readonly JArray artworkEvidence=new JArray();
         private long artworkProgressRevision=-1;private bool concessionMenuSubmitted;
         private LiveHudLayoutAcceptance layoutAcceptance;
+        private MatchRecoveryOverlay recovery;
         private GameplayMenuOverlay gameMenu;private PlayerDisplayControls displayControls;private ViewerRevealPanel reveals;private IGameplayPresentation presentation;private Func<VisualElement,IGameplayPresentation> presentationFactory;private LiveGameAcceptanceDriver acceptance;private SpatialInputAcceptance spatialAcceptance;
         public void SetPresentationFactory(Func<VisualElement,IGameplayPresentation> factory){if(document!=null)throw new InvalidOperationException("PRESENTATION_ALREADY_STARTED");presentationFactory=factory??throw new ArgumentNullException(nameof(factory));}
         private void Write(string name,JObject value){string temporary=Path.Combine(output,name+".tmp");File.WriteAllText(temporary,value.ToString());File.Move(temporary,Path.Combine(output,name+".json"));}
@@ -39,6 +40,8 @@ namespace Manaforge.Play
                 document=gameObject.AddComponent<UIDocument>();document.panelSettings=settings;var root=document.rootVisualElement;root.style.flexGrow=1;root.style.backgroundColor=new Color(.025f,.055f,.075f);
                 GameplayTheme.Attach(root);presentation=presentationFactory!=null?presentationFactory(root):CreateDefaultPresentation(root,ArtworkFixtureScene.Argument("-manaforgeGameAcceptance")=="1",reading.Result.OrganizationVersion>=2);if(presentation is ArenaGameplayPresentation){settings.scaleMode=PanelScaleMode.ConstantPixelSize;UpdateArenaScale();}surface=presentation.Surface;
                 host=new ViewerSessionHost(surface,reading.Result,pipe.WaitForOwnerCloseAsync(cancellation.Token),false,allowIdleWait:true);presentation.Bind(host);panel=presentation.Decisions;reveals=new ViewerRevealPanel(root,host,surface);gameMenu=new GameplayMenuOverlay(root,()=>host.CanConcede,()=>host.ConcedeAsync(),id=>host.ConcessionReceipt(id),()=>{if(presentation is ArenaGameplayPresentation arena)arena.InterruptGestures();},returnToManaforge:()=>{userRequested=true;quit=true;});if(presentation is ArenaGameplayPresentation layoutArena){gameMenu.SetLayoutEditor(layoutArena.LayoutEditor);if(layoutArena.Capabilities.SharedOrganization)gameMenu.SetOrganizationTools(layoutArena.OpenBattlefieldGroups,layoutArena.DismissBattlefieldPrompt);}displayControls=new PlayerDisplayControls(root,ArtworkFixtureScene.Argument("-manaforgeGameAcceptance")!="1",gameMenu.OptionsContent);
+                if(File.Exists(Path.Combine(output,"recovery-role.json")))recovery=new MatchRecoveryOverlay(root,output);
+                gameMenu.MatchPaused=()=>host.MatchPaused;
                 bool gameAcceptance=ArtworkFixtureScene.Argument("-manaforgeGameAcceptance")=="1";
                 if(gameAcceptance && ArtworkFixtureScene.Argument("-manaforgeConcedeAcceptance")!="1" && host.GameplayFormat=="freeform" && presentation is ArenaGameplayPresentation acceptanceArena)layoutAcceptance=new LiveHudLayoutAcceptance(root,acceptanceArena,gameMenu);
                 if(gameAcceptance || ArtworkFixtureScene.Argument("-manaforgeRulesTextProof")=="1"){acceptance=new LiveGameAcceptanceDriver();if(gameAcceptance && presentation is ArenaGameplayPresentation)spatialAcceptance=new SpatialInputAcceptance(panel,surface,host);}
@@ -51,6 +54,8 @@ namespace Manaforge.Play
                 });
             }catch{Application.Quit(1);yield break;}
             while(!quit && !host.Completion.IsCompleted){
+                recovery?.Tick();
+                if(recovery!=null){if(recovery.Paused && !host.MatchPaused){panel.Priority.Suspend();gameMenu.Close();if(presentation is ArenaGameplayPresentation interrupted)interrupted.InterruptGestures();}else if(!recovery.Paused && host.MatchPaused)panel.Priority.Resume();host.MatchPaused=recovery.Paused;if(recovery.Ended){userRequested=true;quit=true;break;}}
                 UpdateArenaScale();
                 host.Tick();if(presentation is ArenaGameplayPresentation beforeArena)beforeArena.BeforeDecisionTick();panel.Tick();if(presentation is ArenaGameplayPresentation afterArena)afterArena.BeforeDecisionTick();var frame=Volatile.Read(ref latest);
                 if(frame!=null && host.HasPresentedRevision(frame.Context.Revision)){
@@ -93,7 +98,7 @@ namespace Manaforge.Play
             if(final?.Result!=null){presentation.Present(final);yield return new WaitForEndOfFrame();if(acceptance!=null && ArtworkFixtureScene.Argument("-manaforgeNoCapture")!="1")ScreenCapture.CaptureScreenshot(Path.Combine(output,"result.png"));if(acceptance!=null)yield return new WaitForSecondsRealtime(.3f);else while(!quit){host.Tick();yield return null;}}
             Write("game-closing",new JObject{["live_game_version"]=1,["requested"]=quit});
             if(spatialAcceptance!=null){Write("board-input-proof",new JObject{["card_keyboard_inputs"]=spatialAcceptance.Inputs});spatialAcceptance.Dispose();}
-            host.Cancel();host.Tick();host.Dispose();reveals.Dispose();presentation.Dispose();while(!consuming.IsCompleted)yield return null;
+            host.Cancel();host.Tick();host.Dispose();recovery?.Dispose();reveals.Dispose();presentation.Dispose();while(!consuming.IsCompleted)yield return null;
             bool cleared=document.rootVisualElement.Query<CardView>().ToList().Count==0;Write("game-closed",new JObject{["live_game_version"]=1,["outcome"]=final?.Result,["user_requested"]=userRequested,["concession_menu_submitted"]=concessionMenuSubmitted,["hud_layout"]=layoutAcceptance?.Certificate(),["snapshots"]=Volatile.Read(ref snapshots),["confirmed"]=Volatile.Read(ref confirmed),["uncertain"]=Volatile.Read(ref uncertain),["viewer_cleared"]=cleared,["cleanup_confirmed"]=host.Completion.Result.CleanupConfirmed});
             Application.Quit(cleared && host.Completion.Result.CleanupConfirmed?0:1);
         }
@@ -168,6 +173,6 @@ namespace Manaforge.Play
             if(!resolutionRestored){Screen.SetResolution(reviewOriginalSize.x,reviewOriginalSize.y,FullScreenMode.Windowed);resolutionRestored=true;Write("resolution-proof",new JObject{["captures"]=resolutionEvidence});captureReady=Time.unscaledTime+.4f;return false;}
             return true;
         }
-        private void OnDestroy(){gameMenu?.Dispose();displayControls?.Dispose();spatialAcceptance?.Dispose();cancellation.Cancel();host?.Dispose();reveals?.Dispose();presentation?.Dispose();pipe?.Dispose();reading?.ContinueWith(done=>{if(done.Status==TaskStatus.RanToCompletion)done.Result?.Dispose();else _=done.Exception;},TaskScheduler.Default);consuming?.ContinueWith(done=>{_=done.Exception;},TaskScheduler.Default);if(settings!=null)Destroy(settings);cancellation.Dispose();}
+        private void OnDestroy(){recovery?.Dispose();gameMenu?.Dispose();displayControls?.Dispose();spatialAcceptance?.Dispose();cancellation.Cancel();host?.Dispose();reveals?.Dispose();presentation?.Dispose();pipe?.Dispose();reading?.ContinueWith(done=>{if(done.Status==TaskStatus.RanToCompletion)done.Result?.Dispose();else _=done.Exception;},TaskScheduler.Default);consuming?.ContinueWith(done=>{_=done.Exception;},TaskScheduler.Default);if(settings!=null)Destroy(settings);cancellation.Dispose();}
     }
 }

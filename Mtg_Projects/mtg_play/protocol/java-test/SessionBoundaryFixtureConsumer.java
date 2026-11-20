@@ -24,6 +24,10 @@ public final class SessionBoundaryFixtureConsumer {
         JsonObject body=new JsonObject();body.addProperty("fixture_only",true);body.add("snapshot",snapshot);
         JsonObject update=new JsonObject();update.addProperty("wire_version",1);update.addProperty("message_type","snapshot");update.addProperty("message_id","s1");update.add("body",body);
         String offered=update.toString(),request=command("first").toString();
+        try(GatewaySessionBoundary paused=new GatewaySessionBoundary(context,true,16)){
+            paused.observe(offered);JsonObject blocked=paused.rejectPaused(command("blocked").toString());require(outcome(blocked).equals("rejected"));require(blocked.getAsJsonObject("body").get("code").getAsString().equals("COMMAND_PENDING"));
+            require(paused.prepare(request).shouldSubmit);paused.recordOutcome("first","confirmed",null);require(outcome(paused.rejectPaused(request)).equals("confirmed"));require(!paused.prepare(command("blocked").toString()).shouldSubmit);
+        }
         try(GatewaySessionBoundary owner=new GatewaySessionBoundary(context,true,16)) {
             owner.observe(offered);require(owner.prepare(request).shouldSubmit);require(!owner.prepare(request).shouldSubmit);
             require(owner.prepare(command("second").toString()).receipt().getAsJsonObject("body").get("code").getAsString().equals("COMMAND_PENDING"));
