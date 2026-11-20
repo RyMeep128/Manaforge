@@ -21,7 +21,11 @@ class MatchRecovery:
 
     @property
     def claimable(self):
-        return not self.ended and not self.finished and (self.controller == "ai" or not self.connected)
+        return (
+            not self.ended
+            and not self.finished
+            and (self.controller == "ai" or not self.connected)
+        )
 
     @property
     def can_resume(self):
@@ -53,9 +57,13 @@ class MatchRecovery:
 
     def public(self):
         return dict(
-            paused=self.paused, controller=self.controller,
-            connected=self.connected, ready=self.ready, ended=self.ended,
-            generation=self.generation, claimable=self.claimable,
+            paused=self.paused,
+            controller=self.controller,
+            connected=self.connected,
+            ready=self.ready,
+            ended=self.ended,
+            generation=self.generation,
+            claimable=self.claimable,
             can_resume=self.can_resume,
             finished=self.finished,
         )
@@ -82,14 +90,29 @@ class RecoveryMailbox:
 
 
 class HostRecovery:
-    def __init__(self, root, server_process, server, gateway, cancel, report,
-                 mailbox, prepare, remote_prepare, *, initial_ai=False):
+    def __init__(
+        self,
+        root,
+        server_process,
+        server,
+        gateway,
+        cancel,
+        report,
+        mailbox,
+        prepare,
+        remote_prepare,
+        *,
+        initial_ai=False,
+    ):
         self.root, self.server = Path(root), Path(server)
         self.server_process, self.gateway, self.cancel = server_process, gateway, cancel
         self.report, self.mailbox = report, mailbox
         self.prepare, self.remote_prepare = prepare, remote_prepare
-        self.state = MatchRecovery(controller="ai" if initial_ai else "human",
-                                   connected=not initial_ai, ready=not initial_ai)
+        self.state = MatchRecovery(
+            controller="ai" if initial_ai else "human",
+            connected=not initial_ai,
+            ready=not initial_ai,
+        )
         self.initial_ai, self.initialized = initial_ai, False
         self.authenticated = False
         self.last_public = None
@@ -99,15 +122,19 @@ class HostRecovery:
 
     def native_command(self, action):
         request_id = str(uuid.uuid4())
-        command = dict(command="match_recovery", request_id=request_id,
-                       game=self.native["game"], action=action,
-                       seat=self.native["guest_native_id"])
+        command = dict(
+            command="match_recovery",
+            request_id=request_id,
+            game=self.native["game"],
+            action=action,
+            seat=self.native["guest_native_id"],
+        )
         self.server_process.stdin.write(json.dumps(command) + "\n")
         self.server_process.stdin.flush()
         response = self.server / "manaforge-responses" / (request_id + ".json")
         deadline = time.monotonic() + 5
         while not response.is_file():
-            if self.cancel.wait(.02) or time.monotonic() > deadline:
+            if self.cancel.wait(0.02) or time.monotonic() > deadline:
                 raise ValueError("RECOVERY_ENGINE_TIMEOUT")
         value = json.loads(response.read_text(encoding="utf-8"))
         response.unlink()
@@ -119,11 +146,11 @@ class HostRecovery:
         path = self.root / "recovery-gateway-command.json"
         deadline = time.monotonic() + 5
         while path.exists():
-            if self.cancel.wait(.02) or time.monotonic() > deadline:
+            if self.cancel.wait(0.02) or time.monotonic() > deadline:
                 raise ValueError("RECOVERY_GATEWAY_TIMEOUT")
         atomic_json(path, dict(action=action, **extra))
         while path.exists():
-            if self.cancel.wait(.02) or time.monotonic() > deadline:
+            if self.cancel.wait(0.02) or time.monotonic() > deadline:
                 raise ValueError("RECOVERY_GATEWAY_TIMEOUT")
 
     def pause(self):
@@ -135,7 +162,7 @@ class HostRecovery:
         self.pause()
         deadline = time.monotonic() + 45
         while self.native_command("pause").get("ready") is not True:
-            if self.cancel.wait(.05) or time.monotonic() > deadline:
+            if self.cancel.wait(0.05) or time.monotonic() > deadline:
                 raise ValueError("RECOVERY_PAUSE_TIMEOUT")
 
     def tick(self):
@@ -163,13 +190,20 @@ class HostRecovery:
                 if self.state.controller == "human":
                     self.state.connected = self.state.ready = True
                     self.claim_deadline = None
-            elif not self.state.finished and self.authenticated and self.state.controller == "human" and self.state.connected:
+            elif (
+                not self.state.finished
+                and self.authenticated
+                and self.state.controller == "human"
+                and self.state.connected
+            ):
                 self.state.disconnect()
                 self.pause()
             if self.claim_deadline and time.monotonic() > self.claim_deadline:
                 self.claim_deadline = None
                 self.state.disconnect()
-                self.error = "The replacement did not connect. Choose Reconnect or add AI."
+                self.error = (
+                    "The replacement did not connect. Choose Reconnect or add AI."
+                )
             action_path = self.root / "seat-0" / "recovery-action.json"
             if action_path.is_file():
                 action = json.loads(action_path.read_text(encoding="utf-8"))
@@ -236,13 +270,18 @@ class HostRecovery:
             if claimed:
                 self.state.disconnect()
                 self.claim_deadline = None
-            self.error = str(error) if str(error).startswith("RECOVERY_") else "Recovery failed. The game remains paused."
+            self.error = (
+                str(error)
+                if str(error).startswith("RECOVERY_")
+                else "Recovery failed. The game remains paused."
+            )
             if str(error) == "SEAT_UNAVAILABLE":
                 self.error = "That seat is no longer available."
             if str(error) != "SEAT_UNAVAILABLE":
                 self.state.paused = True
-        public = dict(self.state.public(), error=self.error,
-                      seats=self.native.get("seats", []))
+        public = dict(
+            self.state.public(), error=self.error, seats=self.native.get("seats", [])
+        )
         public["can_resume"] = public["can_resume"] and self.error is None
         if public != self.last_public:
             try:

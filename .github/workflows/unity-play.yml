@@ -163,6 +163,7 @@ jobs:
           if-no-files-found: error
           path: |
             Mtg_Projects/mtg_play_unity/Artifacts/*mode.xml
+            Mtg_Projects/mtg_play_unity/Artifacts/test-progress.log
             Mtg_Projects/mtg_play_unity/Artifacts/commit.txt
             Mtg_Projects/mtg_play_unity/Artifacts/HudDrawers/
             Mtg_Projects/mtg_play_unity/Artifacts/LayoutRecovery/

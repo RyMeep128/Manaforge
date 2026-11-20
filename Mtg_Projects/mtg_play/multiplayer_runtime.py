@@ -189,7 +189,11 @@ def run_host_game(
     acceptance=False,
     recovery_mailbox=None,
 ):
-    if len(setup.seats) != 2 or setup.seats[0].controller != "local_human" or setup.seats[1].controller not in ("local_human", "engine_ai"):
+    if (
+        len(setup.seats) != 2
+        or setup.seats[0].controller != "local_human"
+        or setup.seats[1].controller not in ("local_human", "engine_ai")
+    ):
         raise LiveGameError("MULTIPLAYER_SETUP_UNSUPPORTED")
     if any(mode not in ("auto", "manual", "full-control") for mode in payment_modes):
         raise LiveGameError("PAYMENT_MODE_INVALID")
@@ -203,7 +207,10 @@ def run_host_game(
 
     pin = manifest_digest(xmage_root)
     initial_ai = setup.seats[1].controller == "engine_ai"
-    engine_setup = replace(setup, seats=tuple(replace(seat, controller="local_human") for seat in setup.seats))
+    engine_setup = replace(
+        setup,
+        seats=tuple(replace(seat, controller="local_human") for seat in setup.seats),
+    )
     payload = export_launch_manifest(
         engine_setup, documents, manaforge_version=version, engine_bundle=xmage_root
     )
@@ -283,19 +290,25 @@ def run_host_game(
             owner.gateway_ready()
             remote = addresses[1]
             remote_payload = {
-                    "type": "prepare",
-                    "format": setup.format,
-                    "session_id": remote["session_id"],
-                    "viewer_id": remote["viewer_id"],
-                    "engine_version": "1.4.62-V1",
-                    "artifact_manifest_sha256": pin,
-                    "viewer_key_hex": keys[1].hex(),
-                    "organization_version": 4,
-                    "recovery_version": 1,
-                }
+                "type": "prepare",
+                "format": setup.format,
+                "session_id": remote["session_id"],
+                "viewer_id": remote["viewer_id"],
+                "engine_version": "1.4.62-V1",
+                "artifact_manifest_sha256": pin,
+                "viewer_key_hex": keys[1].hex(),
+                "organization_version": 4,
+                "recovery_version": 1,
+            }
             recovery = HostRecovery(
-                root, server_process, server, gateway, cancel, report,
-                recovery_mailbox or RecoveryMailbox(), remote_payload,
+                root,
+                server_process,
+                server,
+                gateway,
+                cancel,
+                report,
+                recovery_mailbox or RecoveryMailbox(),
+                remote_payload,
                 lambda payload: remote_prepare(payload, remote["port"]),
                 initial_ai=initial_ai,
             )

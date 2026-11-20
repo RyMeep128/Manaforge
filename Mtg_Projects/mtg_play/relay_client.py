@@ -32,7 +32,9 @@ class RelayClient(C.QObject):
         self.socket.setMaxAllowedIncomingFrameSize(MAX_RELAY)
         self.socket.setMaxAllowedIncomingMessageSize(MAX_RELAY)
         self.socket.connected.connect(
-            lambda: self.send({"op": "create" if hosting else "join", "recovery_version": 1})
+            lambda: self.send(
+                {"op": "create" if hosting else "join", "recovery_version": 1}
+            )
         )
         self.socket.textMessageReceived.connect(self._receive)
         self.socket.binaryMessageReceived.connect(
@@ -67,7 +69,9 @@ class RelayClient(C.QObject):
         self.socket.sendTextMessage(raw)
 
     def payload(self, value, peer=None):
-        self.outgoing.emit({"op": "send", "payload": value, **({"peer": peer} if peer else {})})
+        self.outgoing.emit(
+            {"op": "send", "payload": value, **({"peer": peer} if peer else {})}
+        )
 
     def _receive(self, raw):
         try:
@@ -96,9 +100,10 @@ class RelayClient(C.QObject):
         if not self.closed:
             # A close frame can reach Qt before the relay's final error message.
             reason = self.socket.closeReason()
-            if code in ("RELAY_DISCONNECTED", "RELAY_CONNECTION_FAILED") and re.fullmatch(
-                r"[A-Z_]{1,79}", reason
-            ):
+            if code in (
+                "RELAY_DISCONNECTED",
+                "RELAY_CONNECTION_FAILED",
+            ) and re.fullmatch(r"[A-Z_]{1,79}", reason):
                 code = reason
             self.failure_code = code
             try:

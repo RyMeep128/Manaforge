@@ -59,13 +59,23 @@ def test_recovery_mailbox_is_bounded():
 
 def host_recovery(tmp_path):
     (tmp_path / "seat-0").mkdir()
-    atomic_json(tmp_path / "recovery-gateway-status.json",
-                {"game": "game", "guest_native_id": "guest", "connected": False})
+    atomic_json(
+        tmp_path / "recovery-gateway-status.json",
+        {"game": "game", "guest_native_id": "guest", "connected": False},
+    )
     packets, gateway = [], []
     mailbox = RecoveryMailbox()
-    host = HostRecovery(tmp_path, None, tmp_path, None, threading.Event(),
-                        lambda value: None, mailbox, {"viewer_key_hex": "old"},
-                        packets.append)
+    host = HostRecovery(
+        tmp_path,
+        None,
+        tmp_path,
+        None,
+        threading.Event(),
+        lambda value: None,
+        mailbox,
+        {"viewer_key_hex": "old"},
+        packets.append,
+    )
     host.native_command = lambda action: {"ready": True, "ended": False}
     host.gateway_command = lambda action, **extra: gateway.append((action, extra))
     host.initialized = True
@@ -85,8 +95,10 @@ def test_claim_waits_for_pause_rotates_credentials_and_keeps_host_paused(tmp_pat
 
 def test_stale_claim_cannot_disconnect_or_pause_an_occupied_seat(tmp_path):
     host, mailbox, packets, gateway = host_recovery(tmp_path)
-    atomic_json(tmp_path / "recovery-gateway-status.json",
-                {"game": "game", "guest_native_id": "guest", "connected": True})
+    atomic_json(
+        tmp_path / "recovery-gateway-status.json",
+        {"game": "game", "guest_native_id": "guest", "connected": True},
+    )
     mailbox.send({"action": "claim", "ticket": "too-late"})
     host.tick()
     assert host.state.connected and not host.state.paused
