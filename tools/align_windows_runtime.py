@@ -19,6 +19,13 @@ def version(path):
 def align(bundle):
     internal = bundle / '_internal'
     qt = internal / 'PyQt6/Qt6/bin'
+    # Qt uses the Windows ICU ABI (ucnv_open), whereas developer tools such as
+    # Poppler can provide a same-named ICU with versioned exports (ucnv_open_78).
+    # Let Windows resolve its own system DLL instead of shipping a PATH copy.
+    system_icu = internal / 'icuuc.dll'
+    if system_icu.exists():
+        system_icu.unlink()
+        print('Removed shared icuuc.dll; Qt uses the Windows system ICU')
     # Compare with the already collected Python runtime as well: a newer Python
     # may need a newer VC runtime than Qt. Never touch the pinned JRE payload.
     for name in ('MSVCP140.dll', 'MSVCP140_1.dll', 'MSVCP140_2.dll',

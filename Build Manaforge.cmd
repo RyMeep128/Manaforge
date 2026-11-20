@@ -17,7 +17,10 @@ if not exist "%MANAFORGE_PRODUCTS%\build\gameplay\distribution\xmage\component.j
     echo Complete gameplay payload required. Run tools/package_play_runtime.py first.
     exit /b 1
 )
-"%MANAFORGE_PYTHON%" -m PyInstaller --noconfirm --windowed --onedir --name Manaforge ^
+rem Do not collect unrelated native DLLs from the caller's developer/tool PATH.
+rem In particular, Poppler's ICU has a different ABI from Windows' ICU used by Qt.
+set "PATH=%MANAFORGE_PROXY%\venv\Scripts;%SystemRoot%\System32;%SystemRoot%;%SystemRoot%\System32\Wbem"
+"%MANAFORGE_PYTHON%" -m PyInstaller --clean --noconfirm --windowed --onedir --name Manaforge ^
     --distpath "%MANAFORGE_PRODUCTS%\dist" --workpath "%MANAFORGE_PRODUCTS%\build\manaforge" ^
     --specpath "%MANAFORGE_PRODUCTS%\build\manaforge" ^
     --paths "%MANAFORGE_PRODUCTS%" --paths "%MANAFORGE_PRODUCTS%\mtg_core" --paths "%MANAFORGE_PROXY%" ^

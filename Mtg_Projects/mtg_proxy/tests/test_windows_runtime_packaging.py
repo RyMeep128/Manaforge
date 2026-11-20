@@ -28,10 +28,15 @@ def test_runtime_alignment_preserves_java_and_newer_python(helper, tmp_path, mon
         (java / name).write_bytes(b'14.10')
     (internal / 'MSVCP140.dll').write_bytes(b'14.10')
     (internal / 'VCRUNTIME140.dll').write_bytes(b'14.50')
+    (internal / 'icuuc.dll').write_bytes(b'incompatible tool ICU')
+    (java / 'icuuc.dll').write_bytes(b'private ICU')
     monkeypatch.setattr(helper, 'version', lambda path: tuple(map(int, path.read_text().split('.'))))
 
     helper.align(tmp_path)
     helper.align(tmp_path)  # Repeat builds must keep the same runtime selection.
+
+    assert not (internal / 'icuuc.dll').exists()
+    assert (java / 'icuuc.dll').read_bytes() == b'private ICU'
 
     for name in names:
         expected = b'14.50' if name == 'VCRUNTIME140.dll' else b'14.44'
