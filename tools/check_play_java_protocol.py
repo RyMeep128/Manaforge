@@ -177,6 +177,28 @@ def main():
             check=True,
             timeout=120,
         )
+        if args.dummy_output:
+            output = args.dummy_output.resolve()
+            output.mkdir(parents=True, exist_ok=True)
+            if any(
+                path.is_symlink()
+                or (hasattr(path, "is_junction") and path.is_junction())
+                for path in output.rglob("*")
+            ):
+                parser.error("Dummy output must not contain linked paths")
+            shutil.copytree(
+                workspace / "manaforge", output / "manaforge", dirs_exist_ok=True
+            )
+            if jar.resolve() != (output / "gson.jar").resolve():
+                shutil.copyfile(jar, output / "gson.jar")
+            shutil.copyfile(
+                PROTOCOL / "fixtures/dummy-session-v1.json",
+                output / "dummy-session-v1.json",
+            )
+            print(
+                "Exported test-only Java dummy classes; no credentials or runtime engine"
+            )
+
         if args.compile_only:
             print("Protocol compile-only succeeded; no test suites executed")
             return
@@ -460,27 +482,7 @@ def main():
 
         subprocess.run([runtime, "-cp", str(workspace) + os.pathsep + str(jar), "OrganizationV4Checks"], check=True, timeout=60)
 
-        if args.dummy_output:
-            output = args.dummy_output.resolve()
-            output.mkdir(parents=True, exist_ok=True)
-            if any(
-                path.is_symlink()
-                or (hasattr(path, "is_junction") and path.is_junction())
-                for path in output.rglob("*")
-            ):
-                parser.error("Dummy output must not contain linked paths")
-            shutil.copytree(
-                workspace / "manaforge", output / "manaforge", dirs_exist_ok=True
-            )
-            if jar.resolve() != (output / "gson.jar").resolve():
-                shutil.copyfile(jar, output / "gson.jar")
-            shutil.copyfile(
-                PROTOCOL / "fixtures/dummy-session-v1.json",
-                output / "dummy-session-v1.json",
-            )
-            print(
-                "Exported test-only Java dummy classes; no credentials or runtime engine"
-            )
+
 
 
 if __name__ == "__main__":

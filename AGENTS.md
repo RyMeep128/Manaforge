@@ -12,5 +12,6 @@
 - The canonical workspace is `C:/Users/ryanm/Proxy App/branch_print-proxy-prep-QtPort`.
 - Preserve existing work and shared Git history. Never force-push or bypass repository protection.
 - Always rebuild the local Unity Windows player after Unity changes using `./tools/unity-play.ps1 -Mode Build`. Report build failures explicitly; a CI run does not replace the local rebuild.
-- Use GitHub Actions for test suites; do not run local test suites. Report unavailable or incomplete checks accurately.
+- Run Unity tests, Windows player builds, graphics checks, and Unity gameplay acceptance directly on this Windows machine with `./tools/validate_unity_local.ps1`. Do not use GitHub Actions or register a self-hosted runner for Unity.
+- Keep Python/Core, Java/XMage, protocol, and other non-Unity test suites on GitHub Actions; do not run those suites locally. Report unavailable or incomplete checks accurately.
 - Follow [the workflow guide](docs/development-workflow.md) for CI evidence. The former development-branch promotion cadence is retired.

@@ -1,10 +1,10 @@
-"""Release packaging only admits a successful, exact-source Unity artifact."""
+"""Local Unity evidence must match the release source and player bytes."""
 
 import hashlib
 import importlib.util
 import io
+import json
 from pathlib import Path
-from types import SimpleNamespace
 import zipfile
 
 import pytest
@@ -22,92 +22,84 @@ def helper():
 
 
 def artifact(
-    monkeypatch,
     helper,
     *,
-    source="a" * 40,
+    commit="a" * 40,
+    dirty=False,
+    status="passed",
+    missing=False,
     extra=None,
-    run="success",
-    job="success",
     tamper=False,
 ):
+    files = {
+        "Builds/Windows/ManaforgePlay.exe": b"fixture player",
+        "Builds/Windows/UnityPlayer.dll": b"fixture library",
+        "Artifacts/editmode.xml": b"fixture tests",
+        "Artifacts/playmode.xml": b"fixture tests",
+    }
+    if extra:
+        files[extra] = b"unexpected"
+    stages = [{"name": name, "status": "passed"} for name in helper.REQUIRED_STAGES]
+    report = {
+        "schema": 1,
+        "commit": commit,
+        "dirty": dirty,
+        "status": status,
+        "stages": stages[:-1] if missing else stages,
+        "files": {
+            name: hashlib.sha256(data).hexdigest() for name, data in files.items()
+        },
+    }
     stream = io.BytesIO()
     with zipfile.ZipFile(stream, "w") as archive:
-        archive.writestr("Artifacts/commit.txt", source)
-        archive.writestr("Builds/Windows/ManaforgePlay.exe", b"public fixture player")
-        archive.writestr("Builds/Windows/UnityPlayer.dll", b"public fixture library")
-        if extra:
-            archive.writestr(extra, b"unexpected")
-    payload = stream.getvalue()
-    digest = "sha256:" + hashlib.sha256(payload).hexdigest()
-    if tamper:
-        payload += b"changed"
-
-    def api(path):
-        if "workflows/" in path:
-            return {
-                "workflow_runs": [
-                    {
-                        "id": 7,
-                        "head_sha": "a" * 40,
-                        "status": "completed",
-                        "conclusion": run,
-                        "html_url": "https://github.com/example/run/7",
-                    }
-                ]
-            }
-        if "/jobs?" in path:
-            return {"jobs": [{"conclusion": job}]}
-        if "/artifacts?" in path:
-            return {
-                "artifacts": [
-                    {
-                        "name": "unity-play-" + "a" * 40,
-                        "expired": False,
-                        "digest": digest,
-                        "size_in_bytes": len(payload),
-                        "archive_download_url": "https://api.github.com/example/artifact",
-                    }
-                ]
-            }
-        raise AssertionError(path)
-
-    monkeypatch.setattr(helper, "api", api)
-    monkeypatch.setenv("GH_TOKEN", "public-fixture-token")
-    monkeypatch.setattr(
-        helper.urllib.request,
-        "build_opener",
-        lambda *args: SimpleNamespace(open=lambda *args, **kwargs: io.BytesIO(payload)),
-    )
+        archive.writestr("validation.json", json.dumps(report))
+        for name, data in files.items():
+            archive.writestr(name, data + b"changed" if tamper else data)
+    stream.seek(0)
+    return stream
 
 
-def test_exact_successful_player_can_be_packaged(helper, monkeypatch, tmp_path):
-    artifact(monkeypatch, helper)
+def test_exact_successful_local_player_can_be_packaged(helper, tmp_path):
     target = tmp_path / "Windows"
-    helper.prepare("example/repo", "a" * 40, target)
-    assert (target / "ManaforgePlay.exe").read_bytes() == b"public fixture player"
-    assert (target / "UnityPlayer.dll").is_file()
-
-
-@pytest.mark.parametrize("options", [{"run": "failure"}, {"job": "skipped"}])
-def test_incomplete_checks_cannot_supply_a_player(
-    helper, monkeypatch, tmp_path, options
-):
-    artifact(monkeypatch, helper, **options)
-    with pytest.raises(SystemExit, match="VERIFIED_UNITY_PLAYER_UNAVAILABLE"):
-        helper.prepare("example/repo", "a" * 40, tmp_path / "Windows")
+    helper.extract(artifact(helper), "a" * 40, target)
+    assert (target / "ManaforgePlay.exe").read_bytes() == b"fixture player"
+    assert (
+        json.loads((target / "local-validation.json").read_text())["commit"] == "a" * 40
+    )
+    assert not (tmp_path / "Artifacts").exists()
 
 
 @pytest.mark.parametrize(
     "options",
-    [{"source": "b" * 40}, {"tamper": True}, {"extra": "Builds/Windows/../escape.exe"}],
+    [
+        {"commit": "b" * 40},
+        {"dirty": True},
+        {"status": "failed"},
+        {"missing": True},
+        {"tamper": True},
+        {"extra": "Builds/Windows/../escape.exe"},
+        {"extra": "Builds/Windows/C:escape.exe"},
+        {"extra": "Builds/Windows/manaforgeplay.exe"},
+    ],
 )
-def test_untrusted_payloads_are_rejected_before_extraction(
-    helper, monkeypatch, tmp_path, options
-):
-    artifact(monkeypatch, helper, **options)
+def test_invalid_evidence_is_rejected_before_extraction(helper, tmp_path, options):
     target = tmp_path / "Windows"
     with pytest.raises(ValueError):
-        helper.prepare("example/repo", "a" * 40, target)
+        helper.extract(artifact(helper, **options), "a" * 40, target)
     assert not target.exists()
     assert not (tmp_path / "escape.exe").exists()
+
+
+def test_download_checksum_is_checked_before_import(helper, monkeypatch, tmp_path):
+    class Response(io.BytesIO):
+        url = "https://example.com/unity.zip"
+
+    monkeypatch.setattr(
+        helper.urllib.request,
+        "urlopen",
+        lambda *args, **kwargs: Response(artifact(helper).getvalue()),
+    )
+    target = tmp_path / "Windows"
+    with pytest.raises(ValueError, match="archive checksum"):
+        helper.prepare("https://example.com/unity.zip", "0" * 64, "a" * 40, target)
+    assert not target.exists()

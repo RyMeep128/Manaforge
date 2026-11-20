@@ -13,13 +13,19 @@ Always rebuild the local Unity Windows player after Unity changes with
 `./tools/unity-play.ps1 -Mode Build`. This build is required even when hosted
 checks are unavailable; it does not replace CI or visual acceptance.
 
-Use GitHub Actions exclusively for test suites. After pushing, inspect checks for
-the exact committed SHA. Python/Core, Java/XMage, Unity, protocol, packaging and
-playable human-versus-AI acceptance coverage must be considered when applicable.
+Run Unity validation directly on the owner's Windows desktop with
+`./tools/validate_unity_local.ps1`. This includes EditMode, graphics-enabled
+PlayMode, the Windows player build, screenshots, public artwork, real-engine
+payment and choice checks, human-versus-AI play, concession, authenticated UI,
+and two-seat multiplayer acceptance. See [local Unity validation](unity-ci.md)
+for prerequisites, evidence, and release packaging.
+
+Keep Python/Core, Java/XMage, protocol, and other non-Unity test suites on GitHub
+Actions. After pushing, inspect checks for the exact committed SHA. Local Unity
+results and hosted non-Unity results are separate evidence requirements.
 Opening or fixture success alone does not establish playable acceptance. Missing,
 skipped, cancelled, unavailable or incomplete checks do not count as passing.
-Report code failures and runner, licensing or infrastructure blocks accurately.
-See [Unity CI setup](unity-ci.md) for Windows runners and supported license activation options.
+Report code failures and environment blocks accurately.
 
 Full CI can take 30–40 minutes. Start the requested workflows and report their
 links; the owner will notify the agent when execution is complete. Do not poll or

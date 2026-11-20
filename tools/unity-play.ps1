@@ -126,7 +126,7 @@ $installed = (Get-Item -LiteralPath $EditorPath).VersionInfo.ProductVersion
 if (-not $installed.StartsWith($version)) { throw "Editor version mismatch: expected $version, found $installed" }
 if ($Mode -eq 'EditMode') {
     # Build a current test-only Java peer; Python does not relay any gameplay frames.
-    $dummyArguments = @((Join-Path $PSScriptRoot 'check_play_java_protocol.py'), '--dummy-output', (Join-Path $artifacts 'JavaDummy'))
+    $dummyArguments = @((Join-Path $PSScriptRoot 'check_play_java_protocol.py'), '--compile-only', '--dummy-output', (Join-Path $artifacts 'JavaDummy'))
     $cachedGson = Join-Path $artifacts 'JavaDummy/gson.jar'
     if (Test-Path -LiteralPath $cachedGson) { $dummyArguments += @('--gson', $cachedGson) }
     if ($DownloadGson) { $dummyArguments += '--download-gson' }

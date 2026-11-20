@@ -1,86 +1,182 @@
-"""Fetch the exact commit's successful Unity Actions player for Windows packaging."""
+"""Archive local Unity evidence, or verify and import it for hosted packaging."""
 
 import argparse
+from datetime import datetime
 import hashlib
 import json
-import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+import re
 import shutil
 import subprocess
 import tempfile
 import urllib.request
 import zipfile
 
+ROOT = Path(__file__).resolve().parents[1]
+PROJECT = ROOT / "Mtg_Projects/mtg_play_unity"
+REQUIRED_STAGES = json.loads((ROOT / "tools/unity_local_stages.json").read_text())
+MAX_ARCHIVE = 2 * 1024**3
+MAX_PAYLOAD = 4 * 1024**3
 
-def api(path):
-    return json.loads(subprocess.check_output(["gh", "api", path], text=True))
+
+def read_report(report, commit):
+    if (
+        report.get("schema") != 1
+        or report.get("commit") != commit
+        or report.get("dirty") is not False
+        or report.get("status") != "passed"
+    ):
+        raise ValueError(
+            "Exact-revision successful local Unity validation from a clean workspace required"
+        )
+    stages = report.get("stages", [])
+    if (
+        not stages
+        or any(s.get("status") != "passed" for s in stages)
+        or not set(REQUIRED_STAGES).issubset({s.get("name") for s in stages})
+    ):
+        raise ValueError("Local Unity validation stages are incomplete")
 
 
-def prepare(repository, commit, destination):
+def create(report_path):
+    report = json.loads(report_path.read_text(encoding="utf-8-sig"))
+    read_report(report, report["commit"])
+    commit = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
+    ).strip()
+    dirty = subprocess.check_output(
+        ["git", "status", "--porcelain", "--untracked-files=normal"],
+        cwd=ROOT,
+        text=True,
+    )
+    if commit != report["commit"] or dirty:
+        raise ValueError("Commit or workspace changed after local Unity validation")
+    started = datetime.fromisoformat(report["started"]).timestamp()
+    finished = datetime.fromisoformat(report["finished"]).timestamp()
+    files = {}
+    for path in (PROJECT / "Builds/Windows").rglob("*"):
+        if path.is_file():
+            files[path.relative_to(PROJECT).as_posix()] = path
+    patterns = json.loads((ROOT / "tools/unity_local_evidence.json").read_text())
+    for pattern in patterns:
+        for path in PROJECT.glob(pattern):
+            candidates = path.rglob("*") if path.is_dir() else [path]
+            for candidate in candidates:
+                if candidate.is_file() and candidate.stat().st_mtime >= started:
+                    files[candidate.relative_to(PROJECT).as_posix()] = candidate
+    if not {
+        "Builds/Windows/ManaforgePlay.exe",
+        "Builds/Windows/UnityPlayer.dll",
+        "Artifacts/editmode.xml",
+        "Artifacts/playmode.xml",
+    }.issubset(files):
+        raise ValueError("Player or test evidence is missing")
+    if any(path.stat().st_mtime > finished + 1 for path in files.values()):
+        raise ValueError("Unity payload changed after local validation")
+    report["files"] = {}
+    for name, path in files.items():
+        with path.open("rb") as stream:
+            report["files"][name] = hashlib.file_digest(stream, "sha256").hexdigest()
+    archive = report_path.parent / ("unity-local-" + report["commit"] + ".zip")
+    with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as target:
+        target.writestr("validation.json", json.dumps(report, indent=2))
+        for name, path in files.items():
+            target.write(path, name)
+    with archive.open("rb") as stream:
+        digest = hashlib.file_digest(stream, "sha256").hexdigest()
+    archive.with_suffix(".zip.sha256").write_text(digest + "  " + archive.name + "\n")
+    print(f"Validated local player: {archive}\nSHA256: {digest}")
+
+
+def safe_name(name):
+    path = PurePosixPath(name)
+    return (
+        name == path.as_posix()
+        and not path.is_absolute()
+        and ".." not in path.parts
+        and "\\" not in name
+        and ":" not in name
+        and all(part and not part.endswith((".", " ")) for part in path.parts)
+    )
+
+
+def extract(archive, commit, destination):
     if destination.exists():
         raise ValueError("Use a fresh Unity player destination")
-    runs = api(f"repos/{repository}/actions/workflows/unity-play.yml/runs?head_sha={commit}&per_page=100")["workflow_runs"]
-    selected = None
-    for run in runs:
-        if run["head_sha"] != commit or run["status"] != "completed" or run["conclusion"] != "success":
-            continue
-        jobs = api(f"repos/{repository}/actions/runs/{run['id']}/jobs?per_page=100")["jobs"]
-        if not jobs or any(job.get("conclusion") != "success" for job in jobs):
-            continue
-        artifacts = api(f"repos/{repository}/actions/runs/{run['id']}/artifacts?per_page=100")["artifacts"]
-        selected = next((a for a in artifacts if a["name"] == "unity-play-" + commit and not a["expired"]), None)
-        if selected:
-            break
-    if selected is None:
-        raise SystemExit("VERIFIED_UNITY_PLAYER_UNAVAILABLE: exact-revision successful Unity checks required")
-    digest = selected.get("digest", "")
-    if not digest.startswith("sha256:") or selected["size_in_bytes"] > 2 * 1024**3:
-        raise ValueError("Unity artifact digest or size is invalid")
+    with zipfile.ZipFile(archive) as source:
+        entries = [entry for entry in source.infolist() if not entry.is_dir()]
+        names = [entry.filename for entry in entries]
+        if (
+            len(names) != len(set(n.casefold() for n in names))
+            or any(not safe_name(n) for n in names)
+            or any((e.external_attr >> 16) & 0o170000 == 0o120000 for e in entries)
+            or sum(e.file_size for e in entries) > MAX_PAYLOAD
+        ):
+            raise ValueError("Unsafe or oversized local Unity archive")
+        if source.getinfo("validation.json").file_size > 16 * 1024**2:
+            raise ValueError("Oversized validation manifest")
+        report = json.loads(source.read("validation.json"))
+        read_report(report, commit)
+        files = report.get("files", {})
+        if set(names) != set(files) | {"validation.json"}:
+            raise ValueError("Unity archive file inventory differs from manifest")
+        required = {
+            "Builds/Windows/ManaforgePlay.exe",
+            "Builds/Windows/UnityPlayer.dll",
+            "Artifacts/editmode.xml",
+            "Artifacts/playmode.xml",
+        }
+        if not required.issubset(files):
+            raise ValueError("Player or test evidence is missing")
+        for name, digest in files.items():
+            with source.open(name) as stream:
+                if hashlib.file_digest(stream, "sha256").hexdigest() != digest:
+                    raise ValueError("Unity payload checksum mismatch")
+        # Validate everything before creating the destination. Only player files are imported.
+        for entry in entries:
+            if not entry.filename.startswith("Builds/Windows/"):
+                continue
+            target = destination / entry.filename[len("Builds/Windows/") :]
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with source.open(entry) as stream, target.open("xb") as output:
+                shutil.copyfileobj(stream, output)
+        (destination / "local-validation.json").write_text(json.dumps(report, indent=2))
+    print(f"Verified local Unity validation for {commit}")
 
-    class Redirect(urllib.request.HTTPRedirectHandler):
-        def redirect_request(self, req, fp, code, msg, hdrs, newurl):
-            redirected = super().redirect_request(req, fp, code, msg, hdrs, newurl)
-            if redirected is not None:
-                redirected.remove_header("Authorization")
-            return redirected
 
-    with tempfile.TemporaryDirectory(prefix="manaforge-verified-unity-") as temporary:
-        archive = Path(temporary) / "player.zip"
-        request = urllib.request.Request(selected["archive_download_url"], headers={
-            "Authorization": "Bearer " + os.environ["GH_TOKEN"],
-            "Accept": "application/vnd.github+json", "User-Agent": "Manaforge-release-build",
-        })
-        with urllib.request.build_opener(Redirect()).open(request, timeout=120) as source, archive.open("wb") as target:
-            shutil.copyfileobj(source, target)
-        with archive.open("rb") as source:
-            if "sha256:" + hashlib.file_digest(source, "sha256").hexdigest() != digest:
-                raise ValueError("Unity artifact checksum mismatch")
-        with zipfile.ZipFile(archive) as source:
-            if source.read("Artifacts/commit.txt").decode("utf-8-sig").strip() != commit:
-                raise ValueError("Unity player source revision mismatch")
-            prefix = "Builds/Windows/"
-            entries = [entry for entry in source.infolist() if entry.filename.startswith(prefix) and not entry.is_dir()]
-            if not entries or sum(entry.file_size for entry in entries) > 4 * 1024**3:
-                raise ValueError("Unity player payload is missing or oversized")
-            root = destination.resolve()
-            for entry in entries:
-                target = (destination / entry.filename[len(prefix):]).resolve()
-                if not target.is_relative_to(root) or (entry.external_attr >> 16) & 0o170000 == 0o120000:
-                    raise ValueError("Unsafe Unity player artifact path")
-            names = {entry.filename for entry in entries}
-            if not {prefix + "ManaforgePlay.exe", prefix + "UnityPlayer.dll"}.issubset(names):
-                raise ValueError("Unity player artifact is incomplete")
-            for entry in entries:
-                target = destination / entry.filename[len(prefix):]
-                target.parent.mkdir(parents=True, exist_ok=True)
-                with source.open(entry) as data, target.open("xb") as output:
-                    shutil.copyfileobj(data, output)
-    print("Verified Unity player from " + run["html_url"])
+def prepare(url, digest, commit, destination):
+    if not url.startswith("https://") or not re.fullmatch(r"[0-9a-fA-F]{64}", digest):
+        raise ValueError("An HTTPS local Unity archive URL and SHA256 are required")
+    with tempfile.TemporaryDirectory(prefix="manaforge-local-unity-") as temporary:
+        archive = Path(temporary) / "unity.zip"
+        with (
+            urllib.request.urlopen(url, timeout=120) as response,
+            archive.open("wb") as output,
+        ):
+            if not response.url.startswith("https://"):
+                raise ValueError("Unity archive redirect must use HTTPS")
+            size = 0
+            while chunk := response.read(1024**2):
+                size += len(chunk)
+                if size > MAX_ARCHIVE:
+                    raise ValueError("Unity archive exceeds size limit")
+                output.write(chunk)
+        with archive.open("rb") as stream:
+            if hashlib.file_digest(stream, "sha256").hexdigest() != digest.lower():
+                raise ValueError("Unity archive checksum mismatch")
+        extract(archive, commit, destination)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--repository", required=True)
-    parser.add_argument("--commit", required=True)
+    parser.add_argument("--create", type=Path)
+    parser.add_argument("--url")
+    parser.add_argument("--sha256")
+    parser.add_argument("--commit")
     args = parser.parse_args()
-    prepare(args.repository, args.commit, Path(__file__).resolve().parents[1] / "Mtg_Projects/mtg_play_unity/Builds/Windows")
+    if args.create:
+        create(args.create)
+    elif args.url and args.sha256 and args.commit:
+        prepare(args.url, args.sha256, args.commit, PROJECT / "Builds/Windows")
+    else:
+        parser.error("Supply --create REPORT or --url URL --sha256 DIGEST --commit SHA")

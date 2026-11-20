@@ -1,3 +1,5 @@
+> Current validation policy: Unity suites, builds, graphics, and gameplay acceptance run locally with `tools/validate_unity_local.ps1`; non-Unity suites remain on GitHub Actions. See [the workflow guide](development-workflow.md). References below to the retired Unity workflow describe the former execution location.
+
 # Customizable Tabletop, Modular HUD, and Shared Battlefield Organization
 
 Status: implementation in progress; private HUD customization and shared battlefield drawer previews are enabled in normal Play by owner request. Hosted/full-game and owner acceptance remain incomplete.

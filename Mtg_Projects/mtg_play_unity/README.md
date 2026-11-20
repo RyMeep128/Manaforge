@@ -24,10 +24,15 @@ From the repository root, build the player with:
 
 The player is `Builds/Windows/ManaforgePlay.exe`; retain its entire containing
 folder. Generated logs and reports belong in ignored `Artifacts/` and `Builds/`.
-Test suites run through GitHub Actions. The manual
-[Unity workflow](../../.github/workflows/unity-play.yml) uses the owner-controlled
-Windows runner labelled `manaforge-unity`, with a licensed editor and graphics
-session. Local installation does not establish runner readiness or CI success.
+Run Unity suites and gameplay acceptance directly on the activated Windows PC:
+
+```powershell
+./tools/validate_unity_local.ps1
+```
+
+See [local Unity validation](../../docs/unity-ci.md) for prerequisites, evidence,
+and exact-revision player handoff to hosted packaging. Python, Java, and protocol
+suites continue to run through GitHub Actions.
 
 [Shared protocol](../mtg_play/protocol/README.md),
 [renderer and session references](../../docs/README.md), and the

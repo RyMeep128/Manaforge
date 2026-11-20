@@ -1,70 +1,70 @@
-# Hosted Unity checks
+# Local Unity validation
 
-`Unity Play feasibility` runs on GitHub-hosted Windows 2025, on relevant `main`
-pushes and manual dispatch. It does not depend on a self-hosted runner. Per-ref
-concurrency replaces obsolete runs with the latest commit.
+Unity validation runs directly on the owner's Windows machine. GitHub Actions
+continues to run Python/Core, Java/XMage, protocol, and other non-Unity suites.
+The former Unity Actions workflow and license activation helpers are retired.
+No GitHub runner registration or Unity Actions secrets are needed.
 
-The current setup script uses license-file activation. It is not a working
-unattended setup for the owner's current Unity Personal named-user license.
-Unity Personal activates through Unity Hub; its entitlement XML is not a ULF
-file and must not be substituted for one. Email and password secrets alone do
-not resolve this. A supported CI licensing setup is required before publication;
-do not skip the Unity checks or treat a local build as hosted acceptance.
+## Run
 
-For a license that supports this file-based activation, the script expects these
-repository [Actions secrets](https://github.com/RyMeep128/Manaforge/settings/secrets/actions):
+Close the Unity editor for this project, sign in to Unity Hub, and activate the
+editor pinned in `Mtg_Projects/mtg_play_unity/ProjectSettings/ProjectVersion.txt`.
+Install Python 3.12 or 3.13, JDK 23.0.2+7, and Node.js 22 or newer with npm. Then run from
+PowerShell 7 in the repository root:
 
-- `UNITY_LICENSE`: the complete valid license ULF file, obtained using
-  Unity's supported licensing process.
-- `UNITY_EMAIL`: the associated Unity account email.
-- `UNITY_PASSWORD`: the associated Unity account password.
+```powershell
+./tools/validate_unity_local.ps1
+```
 
-Keep credentials out of chat, repository files, and artifacts. The setup step fails
-explicitly if a secret is absent. A secret name alone does not activate Unity;
-Unity must accept the supplied license on the hosted machine. See the
-[Unity manual activation documentation](https://docs.unity.com/en-us/engine/6000.7/manual/get-started/install-and-upgrade/licenses-and-activation/manual-license-activation/manual-activation-cmd-win).
+The defaults use the existing Python 3.13 and JDK installations on the owner's
+PC. Override them with `-Python <python.exe> -Jdk <jdk-directory>` if needed.
+`MANAFORGE_UNITY_EDITOR` can select another installation of the pinned editor.
+The script installs Python dependencies into an isolated environment for this
+run and uses `npm ci` for the repository's multiplayer relay. It downloads the
+hash-pinned engine into that run's directory. It does not export Unity licenses
+or install a persistent runner service.
 
-`tools/setup_unity_ci.ps1` refuses to run outside hosted Windows Actions. It
-downloads the editor pinned in ProjectVersion.txt, checks the official release
-integrity digest and Windows publisher signature, installs silently, and imports
-the license. Update its installer URL, digest, and version guard together when
-upgrading Unity. License files and private activation logs are deleted, and are
-never uploaded. The installed editor is passed to the existing Unity tooling.
+The Java fixture peer is compiled for Unity exchange tests without running the
+standalone Java protocol suite locally. All Unity validation stages from the
+former Unity workflow are retained: EditMode,
+graphics-enabled PlayMode, Windows build, player smoke, theme captures, payment
+modes, pile and other choices, public artwork preview, a normal shuffled human
+versus AI match, concession, authenticated decision UI, and multiplayer in
+freeform and Commander. A failed stage stops the run and records failure.
+PlayMode graphics checks require all tests to execute without skips.
 
-## Optional Personal license runner
+Logs and the stage report are under `Artifacts/UnityLocal/<run-id>/`.
+Unity test XML and screenshots remain under
+`Mtg_Projects/mtg_play_unity/Artifacts/`. A modified workspace can be validated,
+but release packaging requires a fresh successful run on a clean committed
+revision. Source changes during a run make its evidence ineligible for release.
+Do not reuse a validation report after modifying the player or its source.
 
-The Unity validation workflow exposes a manual `use_personal_runner` input,
-disabled by default. It selects an explicitly
-approved Windows Actions runner labelled `manaforge-personal-unity`, running
-under the same desktop account that activated the pinned editor in Unity Hub.
-The runner is used only for repository-owner manual dispatches of `main`.
-Pushes, pull requests and other actors cannot select this runner through these
-workflows. `tools/use_personal_unity_ci.ps1` independently enforces that boundary.
-It uses an existing Python 3.12/3.13 installation and JDK 23.0.2+7, with Python
-dependencies isolated in a temporary virtual environment. It does not run the
-hosted Python or Java installers on the owner's PC.
+A standalone rebuild remains available:
 
-Registering a runner gives repository jobs access to the Windows account's
-machine and files. Obtain the owner's explicit approval before registering it.
-Use a temporary runner for Unity validation, remove it afterward, and never
-install a persistent runner service. No Unity
-password, local entitlement file or license is uploaded to GitHub. Builds,
-graphics checks and test suites still run as GitHub Actions jobs; successful
-exact-revision checks remain mandatory before publishing an alpha prerelease.
+```powershell
+./tools/unity-play.ps1 -Mode Build
+```
 
-The Windows packaging workflow can set `use_verified_unity_player` to download
-the player artifact from a successful Unity validation run at the exact same
-commit. It verifies the run and all job results, artifact digest, and source
-revision before extraction. Packaging stays on GitHub-hosted Windows, including
-installer compilation and complete packaged gameplay acceptance. No installer
-compiler or packaging service needs to be installed on the owner's PC.
+## Windows packaging and release evidence
 
-The job retains EditMode, graphics-enabled PlayMode (skips fail), Windows player
-build, packaged smoke capture, theme fixtures, public artwork preview, and
-authenticated decision fixtures. Windows-specific pipe and ownership checks run
-on their supported platform. Graphics failures on hosted infrastructure remain
-failures; headless execution does not substitute for visual evidence.
+A successful clean run produces `unity-local-<commit>.zip` and its SHA256 in the
+run directory. The archive contains the player, selected test/visual evidence,
+and a manifest with the tested commit, completed stages, and file checksums.
+It is owner-provided local evidence, not a hosted Unity test result.
 
-Artifacts include test XML, screenshots, fixture reports, player build, and the
-exact source SHA. Inspect the workflow run for that SHA before reporting success.
-Missing licenses, incomplete jobs, and skipped checks are not passing evidence.
+For hosted Windows packaging, make that ZIP available at a downloadable HTTPS
+URL using storage you control, then manually dispatch the **Tests** workflow on
+the same source revision with `build_windows`, `unity_player_url`, and
+`unity_player_sha256`. Uploading evidence does not authorize creating a tag or
+release. The workflow does not upload local files automatically.
+
+Packaging verifies the archive SHA256, clean source revision, all required local
+stages, payload checksums, and safe extraction paths before importing the player.
+Missing or mismatched evidence fails packaging; there is no hosted Unity build
+fallback. Python application startup, Java bridge, installer, and non-Unity
+checks remain hosted. Unity gameplay checks run locally against the standalone
+player; the final combined installer does not receive a hosted Unity match run.
+Publication additionally requires the existing exact-revision protocol, native
+payment, live-opening, and broad XMage engine checks, plus the verified local
+Unity receipt. Successful compilation alone never establishes gameplay acceptance.
