@@ -134,7 +134,7 @@ namespace Manaforge.Play
         public Vector2 Viewport { get; private set; }
         public ContainerLayoutResult Resolved { get; private set; }
         public event Action Changed;
-        public IEnumerable<string> Ids=>states.Keys;
+        public IEnumerable<string> Ids=>states.Keys.ToArray();
         public ContainerLayoutState State(string id)=>states[id];
         public ContainerConstraints Constraints(string id)=>constraints[id];
         public ContainerLayoutController(Vector2 viewport){SetViewport(viewport);}

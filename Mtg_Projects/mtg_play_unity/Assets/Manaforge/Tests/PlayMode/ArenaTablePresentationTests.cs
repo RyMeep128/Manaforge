@@ -23,15 +23,15 @@ namespace Manaforge.Play.Tests
                 var ticket=table.Surface.BeginViewer(session,viewer);yield return null;yield return null;
                 Assert.That(table.Surface.TryPresent(ticket,ViewerCardProjection.ParseSnapshot(wire.ToString(),session,viewer,0,true)),Is.True);table.Present(ViewerDecisionProjection.ParseSnapshot(wire.ToString(),session,viewer,0,true));
                 var lines=root.Q<BattlefieldLinks>();var hud=root.Q<GameplayPlayerHud>();var players=root.Q<GameplayDrawer>("player-life-drawer");players.SetReducedMotion(true);
-                yield return new WaitForSecondsRealtime(.08f);yield return new WaitForEndOfFrame();Assert.That(lines.CurrentLinks.Count,Is.EqualTo(1));
+                yield return new WaitForSecondsRealtime(.08f);yield return null;yield return null;Assert.That(lines.CurrentLinks.Count,Is.EqualTo(1));
                 Rect Destination(){var bounds=lines.WorldToLocal(hud.Player(defender).worldBound);bounds.xMin-=8;bounds.yMin-=8;bounds.xMax+=8;bounds.yMax+=8;return bounds;}
                 Assert.That(Destination().Contains(lines.CurrentLinks[0].To),Is.True,"Attack must point to its explicit defending player");var before=lines.CurrentLinks[0];
-                players.style.translate=new Translate(-320,110);yield return new WaitForSecondsRealtime(.08f);yield return new WaitForEndOfFrame();
+                players.style.translate=new Translate(-320,110);yield return new WaitForSecondsRealtime(.08f);yield return null;yield return null;
                 Assert.That(Destination().Contains(lines.CurrentLinks[0].To),Is.True);Assert.That(Vector2.Distance(lines.CurrentLinks[0].To,before.To),Is.GreaterThan(100));Assert.That(Vector2.Distance(lines.CurrentLinks[0].From,before.From),Is.LessThan(1),"Moving Players does not move the attacker");
-                root.style.width=1366;root.style.height=768;yield return new WaitForSecondsRealtime(.08f);yield return new WaitForEndOfFrame();Assert.That(Destination().Contains(lines.CurrentLinks[0].To),Is.True,"Resize must use the final panel position");
-                players.SetOpen(false);yield return new WaitForSecondsRealtime(.08f);yield return new WaitForEndOfFrame();var header=lines.WorldToLocal(players.Tab.worldBound);header.xMin-=8;header.yMin-=8;header.xMax+=8;header.yMax+=8;Assert.That(header.Contains(lines.CurrentLinks[0].To),Is.True,"Collapsed Players uses its visible header");
-                players.SetOpen(true);yield return new WaitForSecondsRealtime(.08f);yield return new WaitForEndOfFrame();Assert.That(Destination().Contains(lines.CurrentLinks[0].To),Is.True);
-                table.Surface.ClearViewer(ticket);yield return new WaitForEndOfFrame();Assert.That(lines.CurrentLinks,Is.Empty,"Session clearing removes combat arrows");LogAssert.NoUnexpectedReceived();
+                root.style.width=1366;root.style.height=768;yield return new WaitForSecondsRealtime(.08f);yield return null;yield return null;Assert.That(Destination().Contains(lines.CurrentLinks[0].To),Is.True,"Resize must use the final panel position");
+                players.SetOpen(false);yield return new WaitForSecondsRealtime(.08f);yield return null;yield return null;var header=lines.WorldToLocal(players.Tab.worldBound);header.xMin-=8;header.yMin-=8;header.xMax+=8;header.yMax+=8;Assert.That(header.Contains(lines.CurrentLinks[0].To),Is.True,"Collapsed Players uses its visible header");
+                players.SetOpen(true);yield return new WaitForSecondsRealtime(.08f);yield return null;yield return null;Assert.That(Destination().Contains(lines.CurrentLinks[0].To),Is.True);
+                table.Surface.ClearViewer(ticket);yield return null;yield return null;Assert.That(lines.CurrentLinks,Is.Empty,"Session clearing removes combat arrows");LogAssert.NoUnexpectedReceived();
             }finally{settings.targetTexture=null;target.Release();Object.Destroy(target);Object.Destroy(node);Object.Destroy(settings);}yield return null;
         }
         [UnityTest] public IEnumerator PhaseOnlyUpdatesRetainCardsFocusArtworkAndBoundedHand()
