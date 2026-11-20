@@ -30,10 +30,10 @@ CI targets Python 3.12 and 3.13. Windows is the packaged target.
 | Play | [Unity gameplay and development status](docs/play.md) |
 | Card Database | [Settings workspace](docs/card-database-workspace.md) |
 
-Source Play has one **Start Game** button for Unity, with format, deck, and
-mana-payment selectors. A built Windows Unity player and pinned XMage runtime
-are required. Installed builds retain the Play release gate; source availability
-is not a claim of complete gameplay acceptance.
+Play is available in source and installed builds for alpha testing with friends,
+with one **Start Game** button for Unity and format, deck, and mana-payment
+selectors. Installed builds include the Windows Unity player and pinned XMage
+runtime; source development requires preparing these components.
 
 Your decks, artwork, and preferences remain local. Runtime data defaults to
 `%LOCALAPPDATA%/PrintProxyPrep`; set `PRINT_PROXY_PREP_DATA_DIR` for isolated data.

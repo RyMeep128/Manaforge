@@ -8,6 +8,13 @@ from mtg_print.update_service import is_newer_version, UpdateCheckError
 
 RELEASES = (
     {
+        'version': '0.6.132-alpha.1',
+        'summary': 'Play is available in installed builds for testing with friends.',
+        'fixes': [
+            'Open Play from the home screen in Windows installer and portable builds.',
+        ],
+    },
+    {
         'version': '0.3.60-alpha.1',
         'summary': 'A little more discovery with every update. Get back to your decks with the highlights at a glance.',
         'features': [

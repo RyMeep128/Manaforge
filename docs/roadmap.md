@@ -15,8 +15,8 @@ for current workflows and [shared components](shared-components.md) for boundari
 
 Unity is the gameplay UI; Java/XMage owns rules and decisions. Python remains for
 deck/artwork preparation and process ownership. The Python gameplay adapter and
-Qt game table are retired. Source Play offers one **Start Game** action for Unity;
-installed builds retain the release gate.
+Qt game table are retired. Play offers one **Start Game** action for Unity in
+source and installed builds, enabled for alpha testing with friends.
 
 Remaining acceptance includes current-revision Python/Core and protocol checks,
 Java/XMage checks, licensed Unity checks, packaging, and playable saved-deck

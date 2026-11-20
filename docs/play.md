@@ -6,8 +6,10 @@ startup/cleanup. The Python gameplay adapter and Qt game table are retired.
 
 ## Start a game
 
-1. Build the Windows Unity player using the [Unity project guide](../Mtg_Projects/mtg_play_unity/README.md).
-2. Open Manaforge from source and select Play. Choose the format, player count,
+1. Install Manaforge using the Windows installer or portable ZIP, which include
+   the Unity player and XMage runtime. For source development, build the Windows
+   Unity player using the [Unity project guide](../Mtg_Projects/mtg_play_unity/README.md).
+2. Open Manaforge and select Play. Choose the format, player count,
    and Offline or Online. Two players are enabled first; larger Commander games
    remain unavailable until 1v1 acceptance is complete.
 3. Offline fills the other seat with AI. Select your saved deck, the AI's deck,
@@ -17,8 +19,8 @@ startup/cleanup. The Python gameplay adapter and Qt game table are retired.
 
 Returning to Play reloads saved decks. The desktop has no separate Python game
 or Unity preview launch buttons. Diagnostic preview tooling remains available to
-developers. Installed builds retain the release gate; the source override is
-`MANAFORGE_ENABLE_LOCAL_PLAY` (enabled by default).
+developers. Play is enabled in source and installed builds for alpha testing with
+friends; no environment override is required.
 
 The selected XMage fork offers a fresh seven-card hand after each London mulligan.
 Choose Keep or Mulligan again before selecting any cards to put on the bottom;

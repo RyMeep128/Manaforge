@@ -29,16 +29,21 @@ def test_artwork_audit_failures_do_not_open_automatic_update_prompt(app, monkeyp
     home.close()
 
 
-def test_home_registry_disabled_play_keyboard_and_responsive_layout(app, monkeypatch):
-    monkeypatch.setenv('MANAFORGE_ENABLE_LOCAL_PLAY', '0')
+@pytest.mark.parametrize('frozen', [False, True])
+@pytest.mark.parametrize('legacy_override', ['0', '1'])
+def test_home_registry_play_keyboard_and_responsive_layout(app, monkeypatch, frozen, legacy_override):
+    monkeypatch.setattr(sys, 'frozen', frozen, raising=False)
+    monkeypatch.setenv('MANAFORGE_ENABLE_LOCAL_PLAY', legacy_override)
     home = HomeWindow()
     activated = []
     home.moduleRequested.connect(activated.append)
     assert len(MODULES) == 5
     assert home.tiles['library'].isEnabled()
-    assert not home.tiles['play'].isEnabled()
+    assert home.tiles['play'].isEnabled()
+    assert home.navigation['play'].isEnabled()
     home.tiles['play'].click()
-    assert not activated
+    assert activated == ['play']
+    activated.clear()
     home.show()
     home.tiles['editor'].setFocus()
     QtTest.QTest.keyClick(home.tiles['editor'], C.Qt.Key.Key_Return)
@@ -52,21 +57,30 @@ def test_home_registry_disabled_play_keyboard_and_responsive_layout(app, monkeyp
     home.close()
 
 
-def test_controller_reuses_workspaces_inside_the_same_window(app, monkeypatch):
-    monkeypatch.setenv('MANAFORGE_ENABLE_LOCAL_PLAY', '0')
+@pytest.mark.parametrize('frozen', [False, True])
+def test_controller_reuses_workspaces_inside_the_same_window(app, monkeypatch, frozen):
+    monkeypatch.setattr(sys, 'frozen', frozen, raising=False)
     home = HomeWindow()
     created = []
+    class Workspace(W.QMainWindow):
+        def prepare_to_close(self):
+            return True
+
     def factory():
-        window = W.QMainWindow()
+        window = Workspace()
         created.append(window)
         return window
-    controller = ModuleController(home, service=object(), factories={'editor': factory, 'rules': factory})
+    controller = ModuleController(home, service=object(),
+                                  factories={'editor': factory, 'rules': factory, 'play': factory})
     home.show()
     controller.open_module('editor')
     controller.open_module('editor')
     controller.open_module('rules')
     controller.open_module('play')
-    assert len(created) == 2
+    controller.open_module('play')
+    assert len(created) == 3
+    assert home.current_workspace == 'play'
+    assert controller.windows['play'] is created[2]
     assert home.isVisible()
     assert all(not window.isWindow() and window.window() is home for window in created)
     editor = controller.windows['editor']
@@ -76,7 +90,7 @@ def test_controller_reuses_workspaces_inside_the_same_window(app, monkeypatch):
     controller.open_module('editor')
     assert controller.windows['editor'] is editor
     assert editor.property('retainedState') == 'my deck'
-    assert len(created) == 2
+    assert len(created) == 3
     home.close()
 
 
