@@ -60,7 +60,12 @@ namespace Manaforge.Play.Tests
         {
             var normal=new JsonLayoutPresetStore(directory);var first=await normal.ReadAsync();first=await normal.WriteAsync(first.Library.Save(Preset()),first.Revision);
             using var cancel=new CancellationTokenSource();var interrupted=new JsonLayoutPresetStore(directory,_=>cancel.Cancel());
-            Assert.ThrowsAsync<OperationCanceledException>(async()=>await interrupted.WriteAsync(first.Library.Rename("preset-one","Cancelled"),first.Revision,cancel.Token));
+            // ThrowsAsync blocks while pumping a different context from Unity's async test.
+            // Await directly so the cancellation continuation can return to the editor.
+            try {
+                await interrupted.WriteAsync(first.Library.Rename("preset-one","Cancelled"),first.Revision,cancel.Token);
+                Assert.Fail("The interrupted write must report cancellation");
+            } catch(OperationCanceledException) { Assert.That(cancel.IsCancellationRequested,Is.True); }
             Assert.That((await normal.ReadAsync()).Revision,Is.EqualTo(first.Revision));Assert.That(Directory.GetFiles(directory,"*.tmp"),Is.Empty);
         }
         [Test] public async Task CorruptPrimaryRecoversBackupAndNeverRotatesCorruptionOverIt()
