@@ -363,7 +363,7 @@ def main():
     player = ROOT / "Mtg_Projects/mtg_play_unity/Builds/Windows/ManaforgePlay.exe"
     if not player.is_file():
         parser.error("Build the current Unity player first")
-    output.mkdir()
+    output.mkdir(parents=True)
     artwork_directory = artwork_pin = None
     if args.artwork:
         sys.path.insert(0, str(ROOT / "Mtg_Projects/mtg_core"))
