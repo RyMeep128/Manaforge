@@ -38,6 +38,7 @@ class MultiplayerPanel(W.QWidget):
         self.started = False
         self.finished = False
         self.normal_result = False
+        self.failure_code = None
         self.admitted = False
         self.remote_finished = threading.Event()
         self.jobs = JobQueue(self)
@@ -177,6 +178,7 @@ class MultiplayerPanel(W.QWidget):
             )
             self.hosting = hosting
             self.started = self.finished = self.admitted = self.normal_result = False
+            self.failure_code = None
             self.remote_finished.clear()
             self.model = (
                 MultiplayerLobby(self.workspace.format.currentData())
@@ -584,6 +586,8 @@ class MultiplayerPanel(W.QWidget):
     def _status(self, job, state, value):
         if state in ("completed", "failed", "cancelled"):
             self.finished = True
+            if self.failure_code is not None:
+                return
             outcome = value.get("outcome") if isinstance(value, dict) else None
             self.normal_result = outcome in ("win", "loss", "draw")
             if not self.normal_result:
@@ -605,8 +609,11 @@ class MultiplayerPanel(W.QWidget):
 
     @C.pyqtSlot(str)
     def fail(self, code):
-        if self.normal_result:
+        if self.normal_result or self.failure_code is not None:
             return
+        # Cancellation can synchronously report SESSION_EOF. Retain the cause
+        # that prompted cleanup rather than replacing it with GAME_INTERRUPTED.
+        self.failure_code = code
         self.jobs.cancel_all()
         if self.tunnel:
             self.tunnel.close()
@@ -641,6 +648,7 @@ class MultiplayerPanel(W.QWidget):
         self.admitted = False
         self.target_port = None
         self.started = self.finished = self.normal_result = False
+        self.failure_code = None
         self.message.setText("Host a game or enter a friend's invitation.")
         self.render()
 

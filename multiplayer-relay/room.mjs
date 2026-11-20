@@ -39,19 +39,21 @@ export class Room {
       if (!target) throw Error('PEER_UNAVAILABLE');
       this.send(target, { op: 'message', peer: peer.id, payload: m.payload });
     } catch (error) {
-      try { this.send(peer, { op: 'error', code: /^[A-Z_]+$/.test(error.message) ? error.message : 'INVALID_MESSAGE' }); } catch {}
-      this.leave(peer);
+      const code = /^[A-Z_]+$/.test(error.message) ? error.message : 'INVALID_MESSAGE';
+      console.warn('RELAY_' + code);
+      try { this.send(peer, { op: 'error', code }); } catch {}
+      this.leave(peer, code);
     }
   }
-  leave(peer) {
+  leave(peer, code = 'GAME_INTERRUPTED') {
     if (peer.role && this.peers.get(peer.id) !== peer) return;
     if (peer.role) this.peers.delete(peer.id);
-    try { peer.socket.close(1000, 'Room connection closed'); } catch {}
+    try { peer.socket.close(1000, code); } catch {}
     // Rejected/unadmitted sockets never own a seat and cannot interrupt a match.
     if (!peer.role) return;
     const host = this.peers.get('host');
     if (peer.role === 'host' || host?.started) {
-      for (const other of [...this.peers.values()]) { this.peers.delete(other.id); try { this.send(other, { op: 'closed', code: 'GAME_INTERRUPTED' }); } catch {} try { other.socket.close(1000); } catch {} }
+      for (const other of [...this.peers.values()]) { this.peers.delete(other.id); try { this.send(other, { op: 'closed', code }); } catch {} try { other.socket.close(1000, code); } catch {} }
     } else if (peer.role === 'guest' && host) {
       try { this.send(host, { op: 'left', peer: 'guest' }); } catch { this.leave(host); }
     }

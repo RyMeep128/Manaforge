@@ -5,9 +5,11 @@ from pathlib import Path
 import subprocess
 import sys
 import textwrap
+import pytest
 
 
-def test_host_button_survives_qt_events_and_receives_join_code(tmp_path):
+@pytest.mark.parametrize("failure_mode", ["message", "close"])
+def test_host_button_survives_qt_events_and_receives_join_code(tmp_path, failure_mode):
     products = Path(__file__).resolve().parents[2]
     script = textwrap.dedent(
         f"""
@@ -41,23 +43,39 @@ def test_host_button_survives_qt_events_and_receives_join_code(tmp_path):
         widget.mode.setCurrentIndex(widget.mode.findData('online'))
         panel = widget.multiplayer
         panel.endpoint.setText('ws://127.0.0.1:' + str(server.serverPort()))
-        result = {{'passed': False}}
+        result = {{'passed': False, 'closing': False}}
 
         def inspect():
-            if not panel.admitted:
+            if not result['closing']:
+                if not panel.admitted:
+                    return
+                result['passed'] = (
+                    callable(panel.relay.event)
+                    and panel.relay.parent() is panel
+                    and len(panel.code.text()) == 12
+                    and panel.model.seats[0].kind == 'human'
+                    and panel.model.seats[1].kind == 'open'
+                    and 'Join code:' in panel.message.text()
+                )
+                result['closing'] = True
+                if {failure_mode!r} == 'message':
+                    peers[0].sendTextMessage(json.dumps({{'relay_version': 1, 'op': 'error', 'code': 'RATE_LIMIT'}}))
+                else:
+                    from PyQt6.QtWebSockets import QWebSocketProtocol
+                    peers[0].close(QWebSocketProtocol.CloseCode.CloseCodeNormal, 'RATE_LIMIT')
                 return
-            result['passed'] = (
-                callable(panel.relay.event)
-                and panel.relay.parent() is panel
-                and len(panel.code.text()) == 12
-                and panel.model.seats[0].kind == 'human'
-                and panel.model.seats[1].kind == 'open'
-                and 'Join code:' in panel.message.text()
-            )
+            if panel.failure_code is None:
+                return
+            first_message = panel.message.text()
             panel._status('fixture', 'failed', 'SESSION_EOF')
+            panel.fail('GAME_INTERRUPTED')
             result['passed'] = (result['passed'] and panel.leave.isEnabled()
                 and panel.finished and not panel.normal_result and panel.relay.closed
-                and not panel.admitted and not panel.remote_finished.is_set())
+                and not panel.admitted and not panel.remote_finished.is_set()
+                and panel.failure_code == panel.relay.failure_code == 'RATE_LIMIT'
+                and panel.message.text() == first_message and 'rate limit' in first_message)
+            panel.reset()
+            result['passed'] = result['passed'] and panel.failure_code is None
             panel._status('fixture', 'completed', {{'outcome': 'win'}})
             panel.fail('RELAY_DISCONNECTED')
             result['passed'] = result['passed'] and panel.message.text() == 'Game result: win'

@@ -3,6 +3,7 @@
 import base64
 import json
 import queue
+import re
 import socket
 import struct
 import threading
@@ -26,6 +27,7 @@ class RelayClient(C.QObject):
         super().__init__(parent)
         self.endpoint = relay_url(endpoint, development=development)
         self.code, self.hosting, self.closed = code, hosting, False
+        self.failure_code = None
         self.socket = QWebSocket(parent=self)
         self.socket.setMaxAllowedIncomingFrameSize(MAX_RELAY)
         self.socket.setMaxAllowedIncomingMessageSize(MAX_RELAY)
@@ -92,6 +94,25 @@ class RelayClient(C.QObject):
 
     def fail(self, code):
         if not self.closed:
+            # A close frame can reach Qt before the relay's final error message.
+            reason = self.socket.closeReason()
+            if code in ("RELAY_DISCONNECTED", "RELAY_CONNECTION_FAILED") and re.fullmatch(
+                r"[A-Z_]{1,79}", reason
+            ):
+                code = reason
+            self.failure_code = code
+            try:
+                from mtg_core.diagnostics import get_logger
+
+                get_logger(__name__).warning(
+                    "Relay stopped code=%s role=%s socket_error=%s close_code=%s",
+                    code if re.fullmatch(r"[A-Z_0-9]{1,79}", code) else "RELAY_FAILED",
+                    "host" if self.hosting else "guest",
+                    self.socket.error().name,
+                    self.socket.closeCode().name,
+                )
+            except Exception:
+                pass  # Logging must never prevent transport cleanup.
             self.close()
             self.failed.emit(code)
 

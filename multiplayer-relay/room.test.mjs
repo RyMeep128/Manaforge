@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { Room } from './room.mjs';
 function makePeer() {
   const p = { messages: [], closed: false };
-  p.socket = { bufferedAmount: 0, send(raw) { p.messages.push(JSON.parse(raw)); }, close() { p.closed = true; } };
+  p.socket = { bufferedAmount: 0, send(raw) { p.messages.push(JSON.parse(raw)); }, close(code, reason) { p.closed = true; p.closeReason = reason; } };
   return p;
 }
 const send = (room, peer, op, fields = {}) => room.receive(peer, JSON.stringify({ relay_version: 1, op, ...fields }));
@@ -44,4 +44,15 @@ test('expiry, invalid frames and slow consumers fail closed', () => {
   const invalid = makePeer(); room.receive(invalid, '{'); assert.equal(invalid.closed, true);
   const room2 = new Room(), h = makePeer(), g = makePeer(); send(room2, h, 'create'); send(room2, g, 'join');
   g.socket.bufferedAmount = 3 * 1048576; send(room2, h, 'send', { payload: 'bounded' }); assert.equal(h.closed, true); assert.equal(g.closed, true);
+});
+
+test('both endpoints retain the rejection cause in error and close frames', () => {
+  const room = new Room(), host = makePeer(), guest = makePeer();
+  send(room, host, 'create'); send(room, guest, 'join'); send(room, host, 'start');
+  room.receive(guest, '{');
+  assert.equal(guest.messages.at(-1).code, 'INVALID_MESSAGE');
+  assert.equal(host.messages.at(-1).code, 'INVALID_MESSAGE');
+  assert.equal(guest.closeReason, 'INVALID_MESSAGE');
+  assert.equal(host.closeReason, 'INVALID_MESSAGE');
+  assert.equal(room.peers.size, 0);
 });
