@@ -14,6 +14,20 @@ namespace Manaforge.Play
         private GameplayLayoutWorkspace layoutWorkspace;
         private ArenaGameplayPresentation table;private string tableJson,tableSession,tableViewer;private ViewerSurfaceTicket tableTicket;
         private PanelSettings settings;private UIDocument document;private VisualElement content;
+        private RenderTexture captureTarget;
+        private void SetCaptureTarget(Vector2Int size)
+        {
+            settings.targetTexture=null;
+            if(captureTarget!=null){captureTarget.Release();Destroy(captureTarget);}
+            captureTarget=new RenderTexture(size.x,size.y,24);captureTarget.Create();settings.targetTexture=captureTarget;
+        }
+        private void CapturePng(string path)
+        {
+            if(captureTarget==null)throw new InvalidOperationException("REVIEW_CAPTURE_TARGET_MISSING");
+            var previous=RenderTexture.active;var pixels=new Texture2D(captureTarget.width,captureTarget.height,TextureFormat.RGBA32,false);
+            try{RenderTexture.active=captureTarget;pixels.ReadPixels(new Rect(0,0,captureTarget.width,captureTarget.height),0,0);pixels.Apply();File.WriteAllBytes(path,pixels.EncodeToPNG());}
+            finally{RenderTexture.active=previous;Destroy(pixels);}
+        }
         public static void Populate(VisualElement root,ICollection<IDisposable> owned,int seats=3,bool vertical=false)
         {
             GameplayTheme.Attach(root);
@@ -58,12 +72,12 @@ namespace Manaforge.Play
             using(var menu=new GameplayMenuOverlay(root,()=>true,()=>System.Threading.Tasks.Task.FromException<Manaforge.Play.Protocol.TrackedCommand>(new InvalidOperationException("REVIEW_ONLY")),id=>null))
             using(var display=new PlayerDisplayControls(root,false,menu.OptionsContent)){
                 menu.Open();for(int i=0;i<3;i++)yield return null;
-                yield return new WaitForEndOfFrame();ScreenCapture.CaptureScreenshot(Path.Combine(output,"menu-"+size.x+"x"+size.y+".png"));for(int i=0;i<3;i++)yield return null;
+                yield return new WaitForEndOfFrame();CapturePng(Path.Combine(output,"menu-"+size.x+"x"+size.y+".png"));for(int i=0;i<3;i++)yield return null;
                 using(var ev=NavigationSubmitEvent.GetPooled()){ev.target=root.Q<Button>("game-menu-options");root.Q<Button>("game-menu-options").SendEvent(ev);}for(int i=0;i<3;i++)yield return null;
-                yield return new WaitForEndOfFrame();ScreenCapture.CaptureScreenshot(Path.Combine(output,"menu-options-"+size.x+"x"+size.y+".png"));for(int i=0;i<3;i++)yield return null;
+                yield return new WaitForEndOfFrame();CapturePng(Path.Combine(output,"menu-options-"+size.x+"x"+size.y+".png"));for(int i=0;i<3;i++)yield return null;
                 using(var ev=NavigationSubmitEvent.GetPooled()){ev.target=root.Q<Button>("game-menu-back");root.Q<Button>("game-menu-back").SendEvent(ev);}
                 using(var ev=NavigationSubmitEvent.GetPooled()){ev.target=root.Q<Button>("game-menu-concede");root.Q<Button>("game-menu-concede").SendEvent(ev);}for(int i=0;i<3;i++)yield return null;
-                yield return new WaitForEndOfFrame();ScreenCapture.CaptureScreenshot(Path.Combine(output,"menu-confirm-"+size.x+"x"+size.y+".png"));for(int i=0;i<3;i++)yield return null;
+                yield return new WaitForEndOfFrame();CapturePng(Path.Combine(output,"menu-confirm-"+size.x+"x"+size.y+".png"));for(int i=0;i<3;i++)yield return null;
             }
         }
         private void Show(string mode)
@@ -77,7 +91,7 @@ namespace Manaforge.Play
                 ILayoutPresetStore store=ArtworkFixtureScene.Argument("-manaforgeStyleCapture")!=null
                     ?(ILayoutPresetStore)new MemoryLayoutPresetStore()
                     :new JsonLayoutPresetStore(Path.Combine(Application.persistentDataPath,"profiles","default","layouts","fixture"));
-                layoutWorkspace=new GameplayLayoutWorkspace(store);layoutWorkspace.style.height=Mathf.Max(500,Screen.height-140);content.Add(layoutWorkspace);owned.Add(layoutWorkspace);
+                layoutWorkspace=new GameplayLayoutWorkspace(store);layoutWorkspace.style.height=Mathf.Max(500,(captureTarget!=null?captureTarget.height:Screen.height)-140);content.Add(layoutWorkspace);owned.Add(layoutWorkspace);
             }else Populate(content,owned,mode=="Multi-seat"?3:2,mode=="Component sheet");
         }
         private IEnumerator Start()
@@ -88,52 +102,53 @@ namespace Manaforge.Play
             Screen.SetResolution(1366,768,FullScreenMode.Windowed);for(int i=0;i<60;i++)yield return null;
             var resolutions=new JArray();var animationProof=new JArray();
             foreach(var size in new[]{new Vector2Int(1280,720),new Vector2Int(1366,768),new Vector2Int(1920,1080),new Vector2Int(2560,1440)}){
-                Screen.SetResolution(size.x,size.y,FullScreenMode.Windowed);
+                // Render the real UI at each viewport size without relying on the desktop's window-size limit.
+                SetCaptureTarget(size);
                 for(int i=0;i<30;i++)yield return null;
                 Show("Side by side");for(int i=0;i<10;i++)yield return null;
-                yield return new WaitForEndOfFrame();ScreenCapture.CaptureScreenshot(Path.Combine(output,"side-by-side-"+size.x+"x"+size.y+".png"));
+                yield return new WaitForEndOfFrame();CapturePng(Path.Combine(output,"side-by-side-"+size.x+"x"+size.y+".png"));
                 for(int i=0;i<5;i++)yield return null;
                 Show("Multi-seat");for(int i=0;i<10;i++)yield return null;
-                yield return new WaitForEndOfFrame();ScreenCapture.CaptureScreenshot(Path.Combine(output,"multi-seat-"+size.x+"x"+size.y+".png"));
+                yield return new WaitForEndOfFrame();CapturePng(Path.Combine(output,"multi-seat-"+size.x+"x"+size.y+".png"));
                 for(int i=0;i<5;i++)yield return null;
                 Show("Layout workspace");for(int i=0;i<10;i++)yield return null;
-                yield return new WaitForEndOfFrame();ScreenCapture.CaptureScreenshot(Path.Combine(output,"layout-floating-"+size.x+"x"+size.y+".png"));
+                yield return new WaitForEndOfFrame();CapturePng(Path.Combine(output,"layout-floating-"+size.x+"x"+size.y+".png"));
                 for(int i=0;i<5;i++)yield return null;
                 layoutWorkspace.Dock("panel",null,ContainerDockEdge.Left);layoutWorkspace.Dock("drawer",null,ContainerDockEdge.Left);
                 for(int i=0;i<5;i++)yield return null;
-                yield return new WaitForEndOfFrame();ScreenCapture.CaptureScreenshot(Path.Combine(output,"layout-docked-"+size.x+"x"+size.y+".png"));
+                yield return new WaitForEndOfFrame();CapturePng(Path.Combine(output,"layout-docked-"+size.x+"x"+size.y+".png"));
                 for(int i=0;i<5;i++)yield return null;
                 var layoutState=layoutWorkspace.Controller.State("drawer");
                 layoutWorkspace.Controller.TrySet(new ContainerLayoutState("drawer",layoutState.FloatingRect,ContainerMode.Drawer,layoutState.DockTarget,layoutState.Edge,layoutState.Order));
                 layoutWorkspace.Shell("drawer").Drawer.SetReducedMotion(true);layoutWorkspace.Shell("drawer").Drawer.SetOpen(false);
                 for(int i=0;i<5;i++)yield return null;
-                yield return new WaitForEndOfFrame();ScreenCapture.CaptureScreenshot(Path.Combine(output,"layout-collapsed-"+size.x+"x"+size.y+".png"));
+                yield return new WaitForEndOfFrame();CapturePng(Path.Combine(output,"layout-collapsed-"+size.x+"x"+size.y+".png"));
                 for(int i=0;i<5;i++)yield return null;
                 var presetSave=layoutWorkspace.Presets.SaveAsync("Compact",true);
                 while(!presetSave.IsCompleted)yield return null;
                 if(!presetSave.Result)throw new InvalidOperationException("REVIEW_PRESET_SAVE_FAILED");
                 for(int i=0;i<5;i++)yield return null;
-                yield return new WaitForEndOfFrame();ScreenCapture.CaptureScreenshot(Path.Combine(output,"layout-preset-saved-"+size.x+"x"+size.y+".png"));
+                yield return new WaitForEndOfFrame();CapturePng(Path.Combine(output,"layout-preset-saved-"+size.x+"x"+size.y+".png"));
                 for(int i=0;i<5;i++)yield return null;
                 layoutWorkspace.Nudge(8,0,false);layoutWorkspace.Presets.RestoreDefault();
                 for(int i=0;i<5;i++)yield return null;
-                yield return new WaitForEndOfFrame();ScreenCapture.CaptureScreenshot(Path.Combine(output,"layout-preset-confirm-"+size.x+"x"+size.y+".png"));
+                yield return new WaitForEndOfFrame();CapturePng(Path.Combine(output,"layout-preset-confirm-"+size.x+"x"+size.y+".png"));
                 for(int i=0;i<5;i++)yield return null;
                 string fixture=ArtworkFixtureScene.Argument("-manaforgeStyleTableFixture");
                 if(fixture!=null){
                     ShowTable(fixture);for(int i=0;i<20;i++)yield return null;
                     table.Surface.TryPresent(tableTicket,ViewerCardProjection.ParseSnapshot(tableJson,tableSession,tableViewer,0,true));
                     table.Present(ViewerDecisionProjection.ParseSnapshot(tableJson,tableSession,tableViewer,0,true));for(int i=0;i<5;i++)yield return null;
-                    yield return new WaitForEndOfFrame();ScreenCapture.CaptureScreenshot(Path.Combine(output,"default-1v1-"+size.x+"x"+size.y+".png"));
+                    yield return new WaitForEndOfFrame();CapturePng(Path.Combine(output,"default-1v1-"+size.x+"x"+size.y+".png"));
                     for(int i=0;i<5;i++)yield return null;
                     yield return CaptureGameMenu(output,size);
                     yield return CaptureTargeting(output,size);
                     yield return CaptureAnimations(output,size,animationProof);
                 }
-                resolutions.Add(new JObject{["requested_width"]=size.x,["requested_height"]=size.y,["observed_width"]=Screen.width,["observed_height"]=Screen.height});
+                resolutions.Add(new JObject{["requested_width"]=size.x,["requested_height"]=size.y,["observed_width"]=captureTarget.width,["observed_height"]=captureTarget.height,["window_width"]=Screen.width,["window_height"]=Screen.height});
             }
             File.WriteAllText(Path.Combine(output,"animation-proof.json"),new JObject{["fixture_only"]=true,["captures"]=animationProof}.ToString());
-            File.WriteAllText(Path.Combine(output,"resolution-proof.json"),new JObject{["fixture_only"]=true,["sizes"]=resolutions}.ToString());
+            File.WriteAllText(Path.Combine(output,"resolution-proof.json"),new JObject{["fixture_only"]=true,["capture_method"]="RenderTexture",["sizes"]=resolutions}.ToString());
             File.WriteAllText(Path.Combine(output,"revision.txt"),ArtworkFixtureScene.Argument("-manaforgeRevision")??"uncommitted working tree");
             var backs=new JArray();foreach(var back in document.rootVisualElement.Query<CardBackView>().ToList())backs.Add(new JObject{["texture_width"]=back.image?.width??0,["texture_height"]=back.image?.height??0,["element_width"]=back.resolvedStyle.width,["element_height"]=back.resolvedStyle.height,["display"]=back.resolvedStyle.display.ToString()});
             File.WriteAllText(Path.Combine(output,"card-back-proof.json"),new JObject{["fixture_only"]=true,["backs"]=backs}.ToString());
@@ -150,7 +165,7 @@ namespace Manaforge.Play
             for(int i=0;i<3;i++)yield return null;
             var from=arena.WorldToLocal(cards[0].worldBound.center);var to=arena.WorldToLocal(cards[1].worldBound.center);
             overlay.Present(new[]{new BattlefieldLinks.Link(from,to,overlay.HoverColor)},new Dictionary<string,(Vector2,string)>{{"synthetic-target",(to,"1")}},"SYNTHETIC TARGETING | Choose a highlighted target");overlay.BringToFront();
-            for(int i=0;i<5;i++)yield return null;yield return new WaitForEndOfFrame();ScreenCapture.CaptureScreenshot(Path.Combine(output,"targeting-selection-"+size.x+"x"+size.y+".png"));for(int i=0;i<5;i++)yield return null;
+            for(int i=0;i<5;i++)yield return null;yield return new WaitForEndOfFrame();CapturePng(Path.Combine(output,"targeting-selection-"+size.x+"x"+size.y+".png"));for(int i=0;i<5;i++)yield return null;
             overlay.Dispose();cards[0].RemoveFromClassList("mf-target-source");cards[1].RemoveFromClassList("mf-target-legal");
         }
         private IEnumerator CaptureAnimations(string output,Vector2Int size,JArray proof)
@@ -181,8 +196,8 @@ namespace Manaforge.Play
                     review.Observe(frame,new[]{new GameplayMotionBatch(frame.Context,scene.Item2)});review.Advance();yield return null;
                     time=reduced?.05f:.35f;review.Advance();yield return new WaitForEndOfFrame();
                     string filename="animation-"+scene.Item1+(reduced?"-reduced":"-full")+"-"+size.x+"x"+size.y+".png";
-                    ScreenCapture.CaptureScreenshot(Path.Combine(output,filename));for(int i=0;i<5;i++)yield return null;
-                    proof.Add(new JObject{["file"]=filename,["scenario"]=scene.Item1,["reduced_motion"]=reduced,["width"]=Screen.width,["height"]=Screen.height});
+                    CapturePng(Path.Combine(output,filename));for(int i=0;i<5;i++)yield return null;
+                    proof.Add(new JObject{["file"]=filename,["scenario"]=scene.Item1,["reduced_motion"]=reduced,["width"]=captureTarget.width,["height"]=captureTarget.height});
                 }
             }
         }
@@ -208,6 +223,6 @@ namespace Manaforge.Play
             snapshot["objects"]=cards;tableJson=envelope.ToString();tableTicket=table.Surface.BeginViewer(tableSession,tableViewer);
             table.Surface.TryPresent(tableTicket,ViewerCardProjection.ParseSnapshot(tableJson,tableSession,tableViewer,0,true));note.BringToFront();
         }
-        private void OnDestroy(){table?.Dispose();foreach(var item in owned)item.Dispose();owned.Clear();if(settings!=null)Destroy(settings);}
+        private void OnDestroy(){table?.Dispose();foreach(var item in owned)item.Dispose();owned.Clear();if(settings!=null){settings.targetTexture=null;Destroy(settings);}if(captureTarget!=null){captureTarget.Release();Destroy(captureTarget);}}
     }
 }

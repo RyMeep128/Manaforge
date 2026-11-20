@@ -33,6 +33,12 @@ versus AI match, concession, authenticated decision UI, and multiplayer in
 freeform and Commander. A failed stage stops the run and records failure.
 Graphics-enabled EditMode and PlayMode require all tests to execute without skips.
 
+Synthetic style captures render the real UI into GPU render textures at each
+requested viewport size. Resolution evidence records the render-target and
+native window dimensions separately, and the capture script verifies PNG
+dimensions. This allows 2560x1440 layout validation on a desktop whose window
+height is limited to 1080 pixels.
+
 Logs and the stage report are under `Artifacts/UnityLocal/<run-id>/`.
 Unity test XML and screenshots remain under
 `Mtg_Projects/mtg_play_unity/Artifacts/`. A modified workspace can be validated,
