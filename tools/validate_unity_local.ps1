@@ -20,6 +20,7 @@ $env:PYTHONPATH = "$root/Mtg_Projects;$root/Mtg_Projects/mtg_core"
 $env:MANAFORGE_NETWORK_TIMING = '1'
 $runRoot = Join-Path $root ('Artifacts/UnityLocal/' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Force $runRoot | Out-Null
+$evidenceId = Split-Path $runRoot -Leaf
 $engine = Join-Path $runRoot 'engine'
 $venv = Join-Path $runRoot 'venv'
 & $Python -m venv $venv
@@ -83,27 +84,27 @@ try {
     }
     Invoke-Stage 'Packaged real-engine automatic payment without manual rescue' {
         foreach ($case in @('green', 'blue', 'generic', 'floating')) {
-          python tools/check_play_unity_live.py --casting-case $case --payment-mode auto --no-capture --xmage-root "$engine" --jdk-path "$env:JAVA_HOME" --output "Mtg_Projects/mtg_play_unity/Artifacts/Payment-auto-$case"
+          python tools/check_play_unity_live.py --casting-case $case --payment-mode auto --no-capture --xmage-root "$engine" --jdk-path "$env:JAVA_HOME" --output "Mtg_Projects/mtg_play_unity/Artifacts/Payment-auto-$case/$evidenceId"
           if ($LASTEXITCODE -ne 0) { throw "Automatic payment failed: $case" }
         }
     }
     Invoke-Stage 'Packaged real-engine manual payment and full control' {
         foreach ($mode in @('manual', 'full-control')) {
           foreach ($case in @('green', 'floating')) {
-            python tools/check_play_unity_live.py --casting-case $case --payment-mode $mode --no-capture --xmage-root "$engine" --jdk-path "$env:JAVA_HOME" --output "Mtg_Projects/mtg_play_unity/Artifacts/Payment-$mode-$case"
+            python tools/check_play_unity_live.py --casting-case $case --payment-mode $mode --no-capture --xmage-root "$engine" --jdk-path "$env:JAVA_HOME" --output "Mtg_Projects/mtg_play_unity/Artifacts/Payment-$mode-$case/$evidenceId"
             if ($LASTEXITCODE -ne 0) { throw "Manual payment failed: $mode $case" }
           }
         }
     }
     Invoke-Stage 'Real pile selection and destination evidence through the packaged player' {
         foreach ($choice in @('first', 'second')) {
-          python tools/check_play_unity_live.py --casting-case pile --pile-choice $choice --payment-mode auto --no-capture --xmage-root "$engine" --jdk-path "$env:JAVA_HOME" --output "Mtg_Projects/mtg_play_unity/Artifacts/InGameChoice-pile-$choice"
+          python tools/check_play_unity_live.py --casting-case pile --pile-choice $choice --payment-mode auto --no-capture --xmage-root "$engine" --jdk-path "$env:JAVA_HOME" --output "Mtg_Projects/mtg_play_unity/Artifacts/InGameChoice-pile-$choice/$evidenceId"
           if ($LASTEXITCODE -ne 0) { throw "Pile selection failed: $choice" }
         }
     }
     Invoke-Stage 'Real X and existing choice variants through the packaged player' {
         foreach ($case in @('x-zero', 'x', 'cancel', 'search', 'shared-roots', 'modes')) {
-          python tools/check_play_unity_live.py --casting-case $case --payment-mode manual --no-capture --xmage-root "$engine" --jdk-path "$env:JAVA_HOME" --output "Mtg_Projects/mtg_play_unity/Artifacts/InGameChoice-$case"
+          python tools/check_play_unity_live.py --casting-case $case --payment-mode manual --no-capture --xmage-root "$engine" --jdk-path "$env:JAVA_HOME" --output "Mtg_Projects/mtg_play_unity/Artifacts/InGameChoice-$case/$evidenceId"
           if ($LASTEXITCODE -ne 0) { throw "In-game choice failed: $case" }
         }
     }
@@ -111,10 +112,10 @@ try {
         python tools/check_play_deck_preview.py
     }
     Invoke-Stage 'Normal shuffled human versus AI match with automatic payment' {
-        python tools/check_play_unity_game.py --public-decks --payment-mode auto --no-capture --xmage-root "$engine" --jdk-path "$env:JAVA_HOME" --output Mtg_Projects/mtg_play_unity/Artifacts/Payment-normal-game
+        python tools/check_play_unity_game.py --public-decks --payment-mode auto --no-capture --xmage-root "$engine" --jdk-path "$env:JAVA_HOME" --output "Mtg_Projects/mtg_play_unity/Artifacts/Payment-normal-game/$evidenceId"
     }
     Invoke-Stage 'Confirmed concession through the live Escape menu' {
-        python tools/check_play_unity_game.py --public-decks --concede --no-capture --xmage-root "$engine" --jdk-path "$env:JAVA_HOME" --output Mtg_Projects/mtg_play_unity/Artifacts/Concede-menu
+        python tools/check_play_unity_game.py --public-decks --concede --no-capture --xmage-root "$engine" --jdk-path "$env:JAVA_HOME" --output "Mtg_Projects/mtg_play_unity/Artifacts/Concede-menu/$evidenceId"
     }
     Invoke-Stage 'Packaged authenticated decision UI fixture' {
         python tools/check_play_unity_session.py --decisions
@@ -135,7 +136,7 @@ try {
           }
           if (-not $relayReady) { throw 'Standalone relay did not start' }
           foreach ($format in @('freeform', 'commander')) {
-            python tools/check_play_multiplayer.py --relay ws://127.0.0.1:8787 --format $format --xmage-root "$engine" --jdk-path "$env:JAVA_HOME" --output "Mtg_Projects/mtg_play_unity/Artifacts/Multiplayer/$format.json"
+            python tools/check_play_multiplayer.py --relay ws://127.0.0.1:8787 --format $format --xmage-root "$engine" --jdk-path "$env:JAVA_HOME" --output "Mtg_Projects/mtg_play_unity/Artifacts/Multiplayer/$format-$evidenceId.json"
             if ($LASTEXITCODE -ne 0) { throw "Two-Unity multiplayer failed for $format" }
           }
         } finally {
