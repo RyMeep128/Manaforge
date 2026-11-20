@@ -11,7 +11,8 @@ namespace Manaforge.Play
         private readonly VisualElement root,choices,navigation,opponentHand,zoneChoices;
         private readonly ZoneBrowser zoneDrawer;
         private readonly Label stackTitle;
-        private readonly VisualElement stackBackdrop,stackToolbar;
+        private readonly VisualElement stackBackdrop,stackToolbar,stackCards;
+        private long stackForegroundOrder;
         private readonly Button stackToggle,resolveAll;
         private bool stackFocused;private float stackAttentionUntil;
         private readonly System.Collections.Generic.HashSet<string> seenStack=new System.Collections.Generic.HashSet<string>();
@@ -26,7 +27,7 @@ namespace Manaforge.Play
         private readonly VisualElement amountOverlay,amountSurface;private readonly ScrollView amountScroll;private readonly Label amountTitle;private readonly Button reopenAmounts;private string amountDecision;private bool amountMinimized;
         private readonly GameplayDrawer[] foregroundDrawers;
         private readonly GameplayPhaseStrip phaseStrip;
-        private readonly GameplayScrollRegions cardScrolling;
+        private readonly GameplayScrollRegions cardScrolling,stackScrolling;
         private readonly GameplayOverlay inspector;
         private readonly IVisualElementScheduledItem combatLinksRefresh;
         private readonly BattlefieldLinks links;private readonly GameplayAnimationCoordinator animations;private ViewerBoardInput boardInput;private bool disposed;
@@ -52,6 +53,7 @@ namespace Manaforge.Play
             var material=new GameplayTableSurface();material.style.position=Position.Absolute;material.style.left=12;material.style.right=12;material.style.top=12;material.style.bottom=12;root.Add(material);
             stackBackdrop=new VisualElement{name="stack-focus-backdrop",pickingMode=PickingMode.Ignore};stackBackdrop.style.position=Position.Absolute;stackBackdrop.style.backgroundColor=new Color(.025f,.035f,.05f,.94f);stackBackdrop.style.borderTopLeftRadius=stackBackdrop.style.borderTopRightRadius=stackBackdrop.style.borderBottomLeftRadius=stackBackdrop.style.borderBottomRightRadius=12;stackBackdrop.style.display=DisplayStyle.None;root.Add(stackBackdrop);
             Surface=new ViewerCardSurface(root,cardBacks);cardScrolling=new GameplayScrollRegions(Surface.CardsRoot);Surface.CardsRoot.AddToClassList("table-cards");Surface.CardsRoot.pickingMode=PickingMode.Ignore;
+            stackCards=new VisualElement{name="stack-cards",pickingMode=PickingMode.Ignore};stackCards.AddToClassList("table-cards");stackCards.style.display=DisplayStyle.None;root.Add(stackCards);stackScrolling=new GameplayScrollRegions(stackCards);
             Surface.InspectionView.AddToClassList("table-inspection");Surface.InspectionView.SetPresentation(CardPresentationMode.Full,290);Surface.InspectionView.style.display=DisplayStyle.None;
             links=new BattlefieldLinks();root.Add(links);links.SetSource(BuildCombatLinks);combatLinksRefresh=links.schedule.Execute(()=>{if(!disposed && frame?.Combat.Count>0)links.MarkDirtyRepaint();}).Every(16);
             navigation=new VisualElement{name="board-navigation",pickingMode=PickingMode.Ignore};root.Add(navigation);
@@ -73,7 +75,7 @@ namespace Manaforge.Play
             zoneDrawer=new ZoneBrowser(Surface.CardBacks);root.Add(zoneDrawer);zoneDrawer.BrowseRequested+=BrowseZone;zoneDrawer.Closed+=ClosePublicZone;
             stackToolbar=new VisualElement{name="stack-toolbar"};stackToolbar.style.position=Position.Absolute;stackToolbar.style.flexDirection=FlexDirection.Row;stackToolbar.style.alignItems=Align.Center;root.Add(stackToolbar);
             stackTitle=new Label{name="stack-title",enableRichText=false};stackTitle.style.position=Position.Relative;stackTitle.style.top=0;stackTitle.style.right=0;stackTitle.style.width=StyleKeyword.Auto;stackTitle.style.flexGrow=1;stackToolbar.Add(stackTitle);
-            stackToggle=new Button(()=>{stackFocused=!stackFocused;Layout();}){name="stack-focus-toggle",text="Minimize"};stackToolbar.Add(stackToggle);GameplayTheme.Button(stackToggle);
+            stackToggle=new Button(()=>{stackFocused=!stackFocused;if(stackFocused)stackForegroundOrder=GameplayDrawer.NextForegroundOrder();Layout();}){name="stack-focus-toggle",text="Minimize"};stackToolbar.Add(stackToggle);GameplayTheme.Button(stackToggle);
             resolveAll=new Button(()=>{if(Decisions==null)return;if(Decisions.Priority.Current.Yield=="resolve-stack")Decisions.Priority.CancelYield();else if(CanResolveStack()){Decisions.Priority.BeginYield("resolve-stack",Decisions.PriorityFrame);stackAttentionUntil=0;}Decisions.PrioritySettingsChanged();RefreshStackControls();}){name="stack-resolve-all",text="Resolve All"};stackToolbar.Add(resolveAll);GameplayTheme.Button(resolveAll,true);stackToolbar.style.display=DisplayStyle.None;
             actionDrawer=new GameplayDrawer("Actions",GameplayDrawerDirection.Right){name="action-drawer"};root.Add(actionDrawer);
             choices=new ScrollView(ScrollViewMode.Vertical){name="table-choices"};actionDrawer.Content.Add(choices);
@@ -153,8 +155,8 @@ namespace Manaforge.Play
         private void ClearPileArt(){cardScrolling.ClearHandLayout();zonePanel.ClearArtwork();}
         private void ClearZoneResources()
         {
-            ResetAmountPopup();focusRefresh?.Pause();focusRefresh=null;StableStatusText.Set(status,status.text,true);cardScrolling?.Dispose();organizationRenderer?.Clear();LayoutEditor?.EndSession();
-            seenStack.Clear();stackFocused=false;stackAttentionUntil=0;stackToolbar.style.display=stackBackdrop.style.display=DisplayStyle.None;hud?.ClearPresentation();ClearCardFocus();inspecting=false;inspector?.Hide(false);CloseInspection();openZone=openZoneOwner=null;opponentHand.Clear();animations?.Clear();links.MarkDirtyRepaint();
+            ResetAmountPopup();focusRefresh?.Pause();focusRefresh=null;StableStatusText.Set(status,status.text,true);cardScrolling?.Dispose();stackScrolling?.Dispose();organizationRenderer?.Clear();LayoutEditor?.EndSession();
+            seenStack.Clear();stackFocused=false;stackForegroundOrder=0;stackAttentionUntil=0;stackCards.style.display=stackToolbar.style.display=stackBackdrop.style.display=DisplayStyle.None;hud?.ClearPresentation();ClearCardFocus();inspecting=false;inspector?.Hide(false);CloseInspection();openZone=openZoneOwner=null;opponentHand.Clear();animations?.Clear();links.MarkDirtyRepaint();
             zoneDrawer?.ClearBinding();
             root.RemoveFromClassList("browsing-public-zone");frame=null;dismissedZoneDecision=null;rowPages.Clear();handOrder.Clear();
             zonePanel.ClearBinding();if(actionBinding!=null)actionBinding.Reset();else actionDrawer.Reset();priorityDrawer.Reset();zonePanelDrawer.Reset(true);
@@ -203,6 +205,9 @@ namespace Manaforge.Play
             if(disposed)return;
             var layers=foregroundDrawers.Select(drawer=>(order:drawer.ForegroundOrder,element:drawer.parent==hud?(VisualElement)hud:drawer));
             if(organizationRenderer!=null)layers=layers.Concat(organizationRenderer.ForegroundLayers);
+            // Keep the stack's backdrop, cards, and controls together without raising
+            // battlefield cards. Later-opened drawers retain their newer order.
+            if(stackFocused && seenStack.Count>0)layers=layers.Concat(new[]{(order:stackForegroundOrder,element:stackBackdrop),(order:stackForegroundOrder,element:stackCards),(order:stackForegroundOrder,element:stackToolbar)});
             foreach(var layer in layers.Where(layer=>layer.element.parent==root).OrderBy(layer=>layer.order))layer.element.BringToFront();
             if(openZone!=null){zoneDrawer.BringToFront();Surface.CardsRoot.BringToFront();navigation.BringToFront();zoneChoices.BringToFront();}
             organizationRenderer?.BringToolsToFront();result.BringToFront();
@@ -251,7 +256,7 @@ namespace Manaforge.Play
             }
             bool newStack=value.StackIds.Any(id=>!seenStack.Contains(id));
             seenStack.Clear();foreach(string id in value.StackIds)seenStack.Add(id);
-            if(newStack){stackFocused=true;stackAttentionUntil=Time.unscaledTime+.9f;rowPages["stack"]=0;}
+            if(newStack){stackFocused=true;stackForegroundOrder=GameplayDrawer.NextForegroundOrder();stackAttentionUntil=Time.unscaledTime+.9f;rowPages["stack"]=0;}
             if(value.StackIds.Count==0){stackFocused=false;stackAttentionUntil=0;}
             frame=value;if(frame.Decision?.Family=="amounts" && amountDecision!=frame.Decision.DecisionId && openZone!=null){openZone=openZoneOwner=null;zoneDrawer.ClearBinding();}targeting?.Observe(value);
             string viewer=frame.Context.ViewerId;
@@ -408,7 +413,7 @@ namespace Manaforge.Play
             if(disposed || frame==null || unsupportedTopology)return;
             LayoutEditor?.BeforeLegacyLayout();
             float width=root.resolvedStyle.width,height=root.resolvedStyle.height;if(float.IsNaN(width) || width<1 || height<1)return;
-            PlaceTurns();cardScrolling.Begin();
+            PlaceTurns();cardScrolling.Begin();stackScrolling.Begin();
             var visible=new System.Collections.Generic.HashSet<CardView>();
             var stagedNavigation=new VisualElement();
             var items=new System.Collections.Generic.List<(ProjectedCard card,CardView view)>();Surface.VisitPresented((c,v)=>items.Add((c,v)));
@@ -441,7 +446,7 @@ namespace Manaforge.Play
             string viewer=frame.Context.ViewerId;
             bool Land(ProjectedCard c)=>!c.Hidden && (c.Characteristics?.TypeLine??"").Split('—')[0].Split(' ').Contains("Land");
             void Row(System.Collections.Generic.List<(ProjectedCard card,CardView view)> row,float top,float left,float span,float size,bool full=false,string key=null,bool reserveSeat=false)
-                =>GameplayCardLayout.Row(row,stagedNavigation,rowPages,Layout,width,top,left,span,size,full,key,reserveSeat?new Vector2(width*.5f-90,width*.5f+90):(Vector2?)null,visible,cardScrolling,full?Mathf.Max(size*1.4f+24,height*.55f):size+20);
+                =>GameplayCardLayout.Row(row,stagedNavigation,rowPages,Layout,width,top,left,span,size,full,key,reserveSeat?new Vector2(width*.5f-90,width*.5f+90):(Vector2?)null,visible,key=="stack"?stackScrolling:cardScrolling,full?Mathf.Max(size*1.4f+24,height*.55f):size+20);
             bool opening=frame.Turn==0 || frame.Decision?.Family=="mulligan" || (frame.Decision?.Prompt??"").StartsWith("Mulligan",StringComparison.OrdinalIgnoreCase);
             bool ordering=Decisions?.IsLibraryOrdering==true;
             var plan=layoutStrategy.Resolve(new GameplayLayoutContext(width,height,opening,stackFocused,ordering));
@@ -482,6 +487,7 @@ namespace Manaforge.Play
             int handCount=hand.Count;
             GameplayCardLayout.Hand(hand,stagedNavigation,rowPages,Layout,CloseInspection,plan.HandBounds,plan.HandNavigationY,opening,plan.HandSize,visible,cardScrolling,hoveredCard??focusedCard);
             var stack=items.Where(i=>i.card.Zone=="stack").ToList();
+            stackCards.style.display=stack.Count==0?DisplayStyle.None:DisplayStyle.Flex;
             stackTitle.text=stack.Count==0?"":"STACK · "+stack.Count;stackToolbar.style.display=stack.Count==0?DisplayStyle.None:DisplayStyle.Flex;
             var stackBounds=plan.StackBounds;var toolbarBounds=plan.StackToolbarBounds;var backdropBounds=plan.StackBackdropBounds;
             stackToolbar.style.left=toolbarBounds.x;stackToolbar.style.top=toolbarBounds.y;stackToolbar.style.width=toolbarBounds.width;
@@ -515,7 +521,7 @@ namespace Manaforge.Play
             // invalidate picking, focus and transitions even on phase-only updates.
             foreach(var item in items){var display=visible.Contains(item.view)?DisplayStyle.Flex:DisplayStyle.None;if(item.view.style.display.value!=display)item.view.style.display=display;}
             if(items.Any(item=>!priorGeometry[item.view].Equals((item.view.style.left,item.view.style.top,item.view.style.width,item.view.style.height,item.view.style.display))))animations.AfterLayout();
-            cardScrolling.End();
+            cardScrolling.End();stackScrolling.End();
             ReconcileNavigation(stagedNavigation);
             ReconcileCardFocus();
             zones.text=string.Join("\n",items.Where(i=>i.card.Zone!="hand" && i.card.Zone!="battlefield" && i.card.Zone!="stack").GroupBy(i=>i.card.Zone).Select(g=>g.Key+"  "+g.Count()));

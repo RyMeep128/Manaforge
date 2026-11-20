@@ -59,8 +59,9 @@ namespace Manaforge.Play
         }
         internal void PromoteForeground()
         {
-            if(disposed)return;ForegroundOrder=System.Threading.Interlocked.Increment(ref nextForegroundOrder);BringToFront();ForegroundChanged?.Invoke();
+            if(disposed)return;ForegroundOrder=NextForegroundOrder();BringToFront();ForegroundChanged?.Invoke();
         }
+        internal static long NextForegroundOrder()=>System.Threading.Interlocked.Increment(ref nextForegroundOrder);
         private void PointerForeground(PointerDownEvent ev){if(IsOpen)PromoteForeground();}
         private void FocusForeground(FocusInEvent ev){if(IsOpen)PromoteForeground();}
         private static bool Contains(VisualElement parent,VisualElement child){for(var item=child;item!=null;item=item.parent)if(item==parent)return true;return false;}
