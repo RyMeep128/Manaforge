@@ -110,7 +110,7 @@ namespace Manaforge.Play
         {
             if(preserveStatus){continuityUntil=Time.unscaledTime+.12f;float height=Root.resolvedStyle.height;if(!float.IsNaN(height) && height>0)Root.style.minHeight=height;}else{continuityUntil=0;Root.style.minHeight=StyleKeyword.Null;}
             Root.RemoveFromClassList("session-request");Root.RemoveFromClassList("library-ordering");Root.RemoveFromClassList("command-pending");Root.RemoveFromClassList("command-uncertain");Root.RemoveFromClassList("command-confirmed");
-            ClearGroupPreviews();selectedGroup=null;built=false;soleAbilityAttempted=false;autoAfter=-1;IsLibraryOrdering=false;manaInput.Refresh(null);offer=null;submitted=null;numericText=null;numericSubmit=null;if(!preserveStatus){StableStatusText.Set(prompt,"",true);manaPool.text="";status.text="";}controls.Clear();pages.Clear();cardChoices=null;if(!preserveStatus)Root.style.display=Presentation?.Compact==true?DisplayStyle.Flex:DisplayStyle.None;
+            ClearGroupPreviews();selectedGroup=null;built=false;soleAbilityAttempted=false;autoAfter=-1;IsLibraryOrdering=false;manaInput.Refresh(null);offer=null;submitted=null;numericText=null;numericSubmit=null;if(!preserveStatus){StableStatusText.Set(prompt,"",true);manaPool.text="";status.text="";}controls.Clear();pages.Clear();cardChoices=null;if(!preserveStatus)Root.style.display=DisplayStyle.None;
             // Observe a retired task without carrying its result or touching UI from its worker.
             if(pending!=null)pending.ContinueWith(task=>{_=task.Exception;},TaskScheduler.Default);pending=null;
         }
@@ -133,7 +133,7 @@ namespace Manaforge.Play
         {
             ThreadOnly();if(disposed)return;if(priorityEnabled)MonitorPriorityCommands();var current=host.PresentedDecision;
             if(!ReferenceEquals(current,offer)){
-                Clear(preserveStatus:true);offer=current;
+                Clear(preserveStatus:host.Authenticated && !host.Completion.IsCompleted);offer=current;
                 if(offer?.Frame?.Decision!=null){var decision=offer.Frame.Decision;Debug.Log("Manaforge decision: family="+decision.Family+" priority="+decision.IsPriority+" options="+decision.Options.Count+" actions="+offer.Frame.Actions.Count+" finish="+decision.CanFinish+" stack="+offer.Frame.StackIds.Count);}
             }
             if(host.Completion.IsCompleted){Priority.Suspend();autoAfter=-1;}
@@ -149,7 +149,8 @@ namespace Manaforge.Play
             RefreshAmountArtwork();
             if(priorityActions!=null){priorityActions.Root.style.display=unified?DisplayStyle.Flex:DisplayStyle.None;if(!PrioritySessionActive)priorityActions.Reset();}
             decisionBody.style.display=unified || displayPresentation.Compact?DisplayStyle.None:DisplayStyle.Flex;
-            Root.style.display=unified || displayPresentation.Compact || offer!=null || bridge || Presentation.Mode==YieldPresentationMode.Failed?DisplayStyle.Flex:DisplayStyle.None;
+            bool retired=!host.Authenticated && (!host.Completion.IsCompleted || host.Completion.Result.Code=="VIEWER_OWNER_ENDED");
+            Root.style.display=retired?DisplayStyle.None:unified || displayPresentation.Compact || offer!=null || bridge || Presentation.Mode==YieldPresentationMode.Failed?DisplayStyle.Flex:DisplayStyle.None;
             if(Presentation.Mode==YieldPresentationMode.Failed && offer==null){prompt.text=Presentation.Text;}
             manaInput.Refresh(offer);if(offer==null){controls.SetEnabled(false);return;}
             if(pending!=null && pending.IsCompleted){
@@ -279,6 +280,7 @@ namespace Manaforge.Play
 
             if(frame.Decision.CanFinish)controls.Add(Button("decision-finish","Finish selection",()=>Send(captured,()=>host.FinishSelectionAsync(captured))));
             if(frame.Decision.Cancellable)controls.Add(Button("decision-cancel","Cancel choice",()=>Send(captured,()=>host.CancelChoiceAsync(captured))));
+            if(frame.Decision.Family=="mana" && frame.ManaSourceReferences.Count==0)status.text="No cards are available for mana-source selection.";
             if(frame.Decision.Family=="number" || frame.Decision.Family=="amounts")BuildNumbers(captured,frame.Decision);
             controls.SetEnabled(captured.CanSubmit && pending==null);
         }

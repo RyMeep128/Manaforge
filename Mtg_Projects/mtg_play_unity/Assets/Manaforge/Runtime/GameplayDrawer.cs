@@ -51,11 +51,11 @@ namespace Manaforge.Play
         public void SetOpen(bool open,bool focusContent=false)
         {
             if(disposed)return;
-            if(open==IsOpen){if(open)PromoteForeground();if(open && focusContent)FocusContent();return;}
+            if(open==IsOpen){if(open)PromoteForeground();if(open && focusContent){schedule.Execute(FocusContent).StartingIn(1);}return;}
             var focused=panel?.focusController?.focusedElement as VisualElement;
             if(!open && Contains(Content,focused)){returnFocus=focused;Tab.Focus();}
             IsOpen=open;ApplyState(ReducedMotion);if(open)PromoteForeground();OpenChanged?.Invoke(open);
-            if(open && focusContent)FocusContent();
+            if(open && focusContent){schedule.Execute(FocusContent).StartingIn(1);}
         }
         internal void PromoteForeground()
         {
@@ -74,7 +74,8 @@ namespace Manaforge.Play
         private void ApplyState(bool immediate)
         {
             glyph.Open=IsOpen;glyph.MarkDirtyRepaint();closing?.Pause();closing=null;EnableInClassList("drawer-open",IsOpen);Tab.tooltip=title+(IsOpen?" — collapse":" — expand")+(NeedsAttention?" — attention required":"");
-            Content.SetEnabled(IsOpen);RefreshInput();
+            // Preserve control input policy before disabling the subtree; restore it after enabling.
+            if(IsOpen)Content.SetEnabled(true);RefreshInput();if(!IsOpen)Content.SetEnabled(false);
             if(IsOpen)Content.style.visibility=Visibility.Visible;
             else if(immediate || panel==null)Content.style.visibility=Visibility.Hidden;
             else closing=schedule.Execute(()=>{closing=null;if(!IsOpen)Content.style.visibility=Visibility.Hidden;}).StartingIn(230);
@@ -86,9 +87,11 @@ namespace Manaforge.Play
             if(disposed)return;
             if(IsOpen){foreach(var pair in suppressed){pair.Key.pickingMode=pair.Value.picking;pair.Key.focusable=pair.Value.focusable;}suppressed.Clear();return;}
             foreach(var stale in suppressed.Keys.Where(item=>!Contains(Content,item)).ToArray())suppressed.Remove(stale);
-            foreach(var item in Content.Query<VisualElement>().ToList().Prepend(Content)) {
-                if(!suppressed.ContainsKey(item))suppressed.Add(item,(item.pickingMode,item.focusable));item.pickingMode=PickingMode.Ignore;item.focusable=false;
-            }
+            var descendants=Content.Query<VisualElement>().ToList().Prepend(Content).Distinct().ToArray();
+            // Composite controls can change a child's focus policy when their own is changed.
+            // Snapshot the entire subtree before mutating any of it.
+            foreach(var item in descendants)if(!suppressed.ContainsKey(item))suppressed.Add(item,(item.pickingMode,item.focusable));
+            foreach(var item in descendants){item.pickingMode=PickingMode.Ignore;item.focusable=false;}
         }
         public void SetReducedMotion(bool value){if(disposed || ReducedMotion==value)return;ReducedMotion=value;EnableInClassList("drawer-reduced-motion",value);ApplyState(value);}
         public void SetTitle(string value){if(disposed || title==value)return;title=value??throw new ArgumentNullException(nameof(value));SetAttention(NeedsAttention,attentionSummary);}
@@ -97,7 +100,7 @@ namespace Manaforge.Play
         private void Key(KeyDownEvent ev)
         {
             if(ev.keyCode==KeyCode.Escape && IsOpen){SetOpen(false);Tab.Focus();ev.StopPropagation();}
-            else if(ReferenceEquals(ev.target,Tab) && (ev.keyCode==KeyCode.RightArrow || ev.keyCode==KeyCode.DownArrow)){SetOpen(true,true);ev.StopPropagation();}
+            else if(ReferenceEquals(ev.target,Tab) && (ev.keyCode==KeyCode.RightArrow || ev.keyCode==KeyCode.DownArrow)){SetOpen(true,true);ev.StopImmediatePropagation();}
         }
         private void Detached(DetachFromPanelEvent ev){if(ev.target!=this)return;closing?.Pause();closing=null;if(!IsOpen)Content.style.visibility=Visibility.Hidden;}
         public void Dispose(){if(disposed)return;closing?.Pause();closing=null;foreach(var pair in suppressed){pair.Key.pickingMode=pair.Value.picking;pair.Key.focusable=pair.Value.focusable;}suppressed.Clear();returnFocus=null;disposed=true;OpenChanged=null;ForegroundChanged=null;UnregisterCallback<PointerDownEvent>(PointerForeground,TrickleDown.TrickleDown);UnregisterCallback<FocusInEvent>(FocusForeground);UnregisterCallback<KeyDownEvent>(Key);UnregisterCallback<DetachFromPanelEvent>(Detached);RemoveFromHierarchy();}

@@ -62,8 +62,10 @@ namespace Manaforge.Play.Tests
         }
         [UnityTest] public IEnumerator ExplicitSaveLoadRenameDeleteAndRestartPreserveDrawerPreferences()
         {
+            var node=new GameObject("Preset confirmation");var settings=ScriptableObject.CreateInstance<PanelSettings>();settings.themeStyleSheet=Resources.Load<ThemeStyleSheet>("CardTheme");var doc=node.AddComponent<UIDocument>();doc.panelSettings=settings;
+            try{
             var store=new ObservedStore();string id;
-            using(var first=new GameplayLayoutWorkspace(store)){
+            using(var first=new GameplayLayoutWorkspace(store)){doc.rootVisualElement.Add(first);
                 yield return new WaitUntil(()=>first.Presets.Initialization.IsCompleted);
                 first.Nudge(8,0,false);Assert.That(first.Presets.Dirty,Is.True);Assert.That(store.Writes,Is.Zero);
                 var old=first.Controller.State("drawer");first.Controller.TrySet(new ContainerLayoutState("drawer",old.FloatingRect,ContainerMode.Drawer));
@@ -76,7 +78,7 @@ namespace Manaforge.Play.Tests
                 Assert.That(first.Presets.RestoreDefault(true),Is.True);Assert.That(first.Presets.Dirty,Is.False);
                 var load=first.Presets.LoadAsync(id);yield return new WaitUntil(()=>load.IsCompleted);Assert.That(load.Result,Is.True);
             }
-            using(var reopened=new GameplayLayoutWorkspace(store)){
+            using(var reopened=new GameplayLayoutWorkspace(store)){doc.rootVisualElement.Add(reopened);
                 yield return new WaitUntil(()=>reopened.Presets.Initialization.IsCompleted);
                 Assert.That(reopened.Presets.SelectedId,Is.EqualTo(id));Assert.That(reopened.Controller.State("drawer").Mode,Is.EqualTo(ContainerMode.Drawer));
                 Assert.That(reopened.Shell("drawer").DrawerExpandedPreference,Is.False);
@@ -86,6 +88,7 @@ namespace Manaforge.Play.Tests
                 yield return new WaitUntil(()=>!reopened.Presets.Busy);
                 Assert.That(reopened.Presets.SelectedId,Is.Null);Assert.That(reopened.Presets.Dirty,Is.True);
             }
+            }finally{UnityEngine.Object.Destroy(node);UnityEngine.Object.Destroy(settings);}yield return null;
         }
         [UnityTest] public IEnumerator FailedLoadLeavesLayoutAndUnsavedWorkIntact()
         {

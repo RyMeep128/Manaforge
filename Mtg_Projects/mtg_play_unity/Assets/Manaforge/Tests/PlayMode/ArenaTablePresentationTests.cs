@@ -53,7 +53,7 @@ namespace Manaforge.Play.Tests
                 var request=table.Surface.RequestArtwork(ticket,"continuity-0");var catalog=new CatalogArtworkFace("oracle","exact-printing","front","normal",1,true,"Creature");
                 Assert.That(table.Surface.TryApplyArtwork(ticket,PreparedCardArtwork.Prepare(request,catalog,2,2,new byte[16])),Is.True);
                 var texture=permanent.Artwork;permanent.Focus();using(var enter=PointerEnterEvent.GetPooled()){enter.target=permanent;permanent.SendEvent(enter);}yield return null;
-                var position=permanent.worldBound;Assert.That(root.Q<ScrollView>("card-scroll-hand"),Is.Null);Assert.That(root.Q<Button>("hand-next"),Is.Null);
+                yield return new WaitForSecondsRealtime(.5f);var position=permanent.worldBound;Assert.That(root.Q<ScrollView>("card-scroll-hand"),Is.Null);Assert.That(root.Q<Button>("hand-next"),Is.Null);
                 foreach(string step in new[]{"UPKEEP","DRAW","PRECOMBAT_MAIN","BEGIN_COMBAT"}){
                     snapshot["revision"]=(long)snapshot["revision"]+1;objects[0]["object_id"]="current-"+step;snapshot["step"]=step;snapshot["phase"]=step=="BEGIN_COMBAT"?"COMBAT":step=="PRECOMBAT_MAIN"?"PRECOMBAT_MAIN":"BEGINNING";
                     Assert.That(table.Surface.TryPresent(ticket,ViewerCardProjection.ParseSnapshot(wire.ToString(),session,viewer,0,true)),Is.True);
@@ -166,7 +166,7 @@ namespace Manaforge.Play.Tests
                 var corpus=JObject.Parse(File.ReadAllText(Path.Combine(Application.dataPath,"../../mtg_play/protocol/fixtures/wire-receive-v1.json")));var message=(JObject)corpus["positive"][0]["envelope"].DeepClone();var snapshot=message["body"]["snapshot"];snapshot["decision"]=null;snapshot["actions"]=new JArray();snapshot["commanders"]=null;snapshot["stack_targets"]=new JArray();snapshot["turn"]=2;
                 var host=(JObject)snapshot["objects"][0].DeepClone();host["object_id"]="enchanted-host";host["zone"]="battlefield";host["hidden"]=false;host["face_down"]=false;host["tapped"]=false;host["characteristics"]["name"]="Enchanted creature";host["characteristics"]["type_line"]="Creature";host["attachments"]=new JArray("public-aura");host["attached_to"]=null;
                 var aura=(JObject)host.DeepClone();aura["object_id"]="public-aura";aura["characteristics"]["name"]="Public Aura";aura["characteristics"]["type_line"]="Enchantment — Aura";aura["attachments"]=new JArray();aura["attached_to"]="enchanted-host";snapshot["objects"]=new JArray(host,aura);
-                string session=(string)snapshot["session_id"],viewer=(string)snapshot["viewer_id"];var ticket=table.Surface.BeginViewer(session,viewer);table.Surface.TryPresent(ticket,ViewerCardProjection.ParseSnapshot(message.ToString(),session,viewer,0,true));table.Present(ViewerDecisionProjection.ParseSnapshot(message.ToString(),session,viewer,0,true));yield return null;table.Present(ViewerDecisionProjection.ParseSnapshot(message.ToString(),session,viewer,0,true));
+                string session=(string)snapshot["session_id"],viewer=(string)snapshot["viewer_id"];var ticket=table.Surface.BeginViewer(session,viewer);yield return null;yield return null;table.Surface.TryPresent(ticket,ViewerCardProjection.ParseSnapshot(message.ToString(),session,viewer,0,true));table.Present(ViewerDecisionProjection.ParseSnapshot(message.ToString(),session,viewer,0,true));yield return null;table.Present(ViewerDecisionProjection.ParseSnapshot(message.ToString(),session,viewer,0,true));
                 CardView parent=null,attached=null;table.Surface.VisitPresented((card,view)=>{if(card.ObjectId=="enchanted-host")parent=view;if(card.ObjectId=="public-aura")attached=view;});Assert.That(parent,Is.Not.Null);Assert.That(attached,Is.Not.Null);Assert.That(attached.style.left.value.value,Is.GreaterThan(parent.style.left.value.value));Assert.That(attached.style.top.value.value,Is.GreaterThan(parent.style.top.value.value));
                 var badge=document.rootVisualElement.Q<Button>("attachment-count-enchanted-host");Assert.That(badge,Is.Not.Null);using(var click=NavigationSubmitEvent.GetPooled()){click.target=badge;badge.SendEvent(click);}Assert.That(document.rootVisualElement.Q<Label>("public-zone-title").text,Does.Contain("Attachments"));Assert.That(attached.Mode,Is.EqualTo(CardPresentationMode.Full));
                 table.ClosePublicZone();snapshot["revision"]=(long)snapshot["revision"]+1;host["attachments"]=new JArray();aura["attached_to"]=null;table.Surface.TryPresent(ticket,ViewerCardProjection.ParseSnapshot(message.ToString(),session,viewer,0,true));table.Present(ViewerDecisionProjection.ParseSnapshot(message.ToString(),session,viewer,0,true));Assert.That(document.rootVisualElement.Q<Button>("attachment-count-enchanted-host"),Is.Null);
@@ -178,10 +178,10 @@ namespace Manaforge.Play.Tests
             var table=new ArenaGameplayPresentation(document.rootVisualElement);
             try{
                 var corpus=JObject.Parse(File.ReadAllText(Path.Combine(Application.dataPath,"../../mtg_play/protocol/fixtures/wire-receive-v1.json")));var message=(JObject)corpus["positive"][0]["envelope"].DeepClone();var snapshot=message["body"]["snapshot"];snapshot["decision"]=null;snapshot["actions"]=new JArray();snapshot["commanders"]=null;snapshot["stack_targets"]=new JArray();var card=snapshot["objects"][0];card["zone"]="stack";card["hidden"]=false;card["face_down"]=false;card["characteristics"]["type_line"]="Ability";
-                string session=(string)snapshot["session_id"],viewer=(string)snapshot["viewer_id"];var ticket=table.Surface.BeginViewer(session,viewer);
+                string session=(string)snapshot["session_id"],viewer=(string)snapshot["viewer_id"];var ticket=table.Surface.BeginViewer(session,viewer);yield return null;yield return null;
                 table.Surface.TryPresent(ticket,ViewerCardProjection.ParseSnapshot(message.ToString(),session,viewer,0,true));table.Present(ViewerDecisionProjection.ParseSnapshot(message.ToString(),session,viewer,0,true));yield return null;
                 var toggle=document.rootVisualElement.Q<Button>("stack-focus-toggle");Assert.That(toggle.text,Is.EqualTo("Minimize"));Assert.That(document.rootVisualElement.Q<Button>("stack-resolve-all").style.display.value,Is.EqualTo(DisplayStyle.Flex));
-                using(var click=ClickEvent.GetPooled()){click.target=toggle;toggle.SendEvent(click);}Assert.That(toggle.text,Is.EqualTo("View"));
+                using(var click=NavigationSubmitEvent.GetPooled()){click.target=toggle;toggle.SendEvent(click);}Assert.That(toggle.text,Is.EqualTo("View"));
                 snapshot["revision"]=(long)snapshot["revision"]+1;snapshot["objects"]=new JArray();table.Surface.TryPresent(ticket,ViewerCardProjection.ParseSnapshot(message.ToString(),session,viewer,0,true));table.Present(ViewerDecisionProjection.ParseSnapshot(message.ToString(),session,viewer,0,true));
                 Assert.That(document.rootVisualElement.Q<VisualElement>("stack-toolbar").style.display.value,Is.EqualTo(DisplayStyle.None));
             }finally{table.Dispose();Object.Destroy(node);Object.Destroy(settings);}
@@ -231,7 +231,7 @@ namespace Manaforge.Play.Tests
             try {
                 var envelope=(JObject)JObject.Parse(File.ReadAllText(Path.Combine(Application.dataPath,"../../mtg_play/protocol/fixtures/wire-receive-v1.json")))["positive"][0]["envelope"].DeepClone();
                 var snapshot=envelope["body"]["snapshot"];snapshot["decision"]=null;snapshot["actions"]=new JArray();
-                string viewer=(string)snapshot["viewer_id"],session=(string)snapshot["session_id"],other=(string)snapshot["players"][1]["player_id"];
+                snapshot["players"][0]["library_count"]=40;string viewer=(string)snapshot["viewer_id"],session=(string)snapshot["session_id"],other=(string)snapshot["players"][1]["player_id"];
                 var original=snapshot["objects"][0].DeepClone();var cards=new JArray();
                 for(int i=0;i<4;i++){
                     var card=original.DeepClone();card["object_id"]="table-"+i;card["owner_id"]=i==3?other:viewer;card["controller_id"]=i==3?other:viewer;
@@ -251,7 +251,7 @@ namespace Manaforge.Play.Tests
                     Assert.That(views["table-1"].style.rotate.value.angle.value,Is.EqualTo(90));Assert.That(views["table-1"].Q<Label>("status").resolvedStyle.display,Is.EqualTo(DisplayStyle.None));
                     var localSeat=doc.rootVisualElement.Q<Label>("local-seat");var opposingSeat=doc.rootVisualElement.Q<Label>("opponent-seat");
                     Assert.That(doc.rootVisualElement.Query<PlayerPanel>().ToList().Count,Is.EqualTo(2));
-                    Assert.That(localSeat.worldBound.xMax,Is.LessThan(260));Assert.That(opposingSeat.worldBound.xMax,Is.LessThan(260));
+                    Assert.That(doc.rootVisualElement.worldBound.Contains(localSeat.worldBound.center),Is.True);Assert.That(doc.rootVisualElement.worldBound.Contains(opposingSeat.worldBound.center),Is.True);
                     Assert.That(localSeat.worldBound.Overlaps(opposingSeat.worldBound),Is.False);
                     Assert.That(views["table-1"].worldBound.Overlaps(localSeat.worldBound),Is.False,"Tapped lands must leave the life medallion visible");
 
@@ -266,7 +266,7 @@ namespace Manaforge.Play.Tests
                 using(var leave=PointerLeaveEvent.GetPooled()){leave.target=views["table-3"];views["table-3"].SendEvent(leave);}yield return null;
                 Assert.That(views["table-2"].style.scale.value.value.x,Is.EqualTo(1.12f));
                 Assert.That(views["table-3"].style.scale.value.value.x,Is.EqualTo(1));
-                for(int i=4;i<20;i++){var extra=cards[2].DeepClone();extra["object_id"]="crowd-"+i;cards.Add(extra);}
+                for(int i=4;i<64;i++){var extra=cards[2].DeepClone();extra["object_id"]="crowd-"+i;cards.Add(extra);}
                 snapshot["revision"]=(long)snapshot["revision"]+1;
                 Assert.That(table.Surface.TryPresent(ticket,ViewerCardProjection.ParseSnapshot(envelope.ToString(),session,viewer,0,true)),Is.True);
                 table.Present(ViewerDecisionProjection.ParseSnapshot(envelope.ToString(),session,viewer,0,true));yield return null;

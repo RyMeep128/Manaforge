@@ -148,14 +148,14 @@ if ($Mode -in @('EditMode', 'PlayMode')) {
     [xml]$report = Get-Content -LiteralPath $results
     # Counts include printing policy/card components and attached-panel handoff checks.
     $minimum = if ($TestFilter -ne 'Manaforge.Play.Tests') { 1 } elseif ($Mode -eq 'EditMode') { 366 } else { 98 }
-    # Optional local asset packs can mark a successful run Skipped:Ignored.
-    # Require enough executed passes and reject failures or other result states.
+    # Standalone headless runs may ignore checks that need a graphics device.
+    # Require executed passes; graphics-enabled validation also rejects every skip.
     if ($report.'test-run'.result -notin @('Passed', 'Skipped:Ignored') -or
         [int]$report.'test-run'.failed -ne 0 -or [int]$report.'test-run'.passed -lt $minimum) {
         throw "Missing or failed $Mode acceptance"
     }
-    if ($Graphics -and $Mode -eq 'PlayMode' -and [int]$report.'test-run'.skipped -ne 0) {
-        throw 'Graphics PlayMode requires every check to execute without skips'
+    if ($Graphics -and [int]$report.'test-run'.skipped -ne 0) {
+        throw "Graphics $Mode requires every check to execute without skips"
     }
     if ($Mode -eq 'PlayMode' -and -not $Graphics) { Write-Output 'GPU pixel readback requires -Graphics; headless results are not GPU evidence' }
     Write-Output "${Mode}: $($report.'test-run'.passed) passed"

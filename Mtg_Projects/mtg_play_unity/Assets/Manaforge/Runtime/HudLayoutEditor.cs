@@ -253,6 +253,8 @@ namespace Manaforge.Play
         private void Render(ContainerLayoutResult result)
         {
             if(disposed || canvas.panel==null || !ContainerLayoutResolver.Finite(canvas.resolvedStyle.width) || !ContainerLayoutResolver.Finite(canvas.resolvedStyle.height))return;bool restored=false;
+            // A gameplay publication must keep the active drag preview, not redraw committed bounds.
+            if(gestures?.PreviewState!=null)result=Controller.Preview(gestures.PreviewState)??result;
             foreach(var pair in adapters){bool available=registry.Find(pair.Key)?.Available==true;pair.Value.SetEditing(IsEditing && available);
                 var state=gestures?.PreviewState?.Id==pair.Key?gestures.PreviewState:Controller.State(pair.Key);
                 float requested=Mathf.Clamp(state.FloatingRect.height*Controller.Viewport.y,Controller.Constraints(pair.Key).Minimum.y,Controller.Constraints(pair.Key).Maximum.y);

@@ -274,7 +274,13 @@ namespace Manaforge.Play
             var target=displayOrganization.Groups.LastOrDefault(g=>g.Seat==organization.Viewer && bounds.TryGetValue(g.Id,out var rect) && new Rect(rect.x,rect.y,rect.width,groups[g.Id].MembersVisible?rect.height:30).Contains(point));
             if(target!=null){int index=target.Objects.Count(id=>!displayOrganization.Handles.TryGetValue(id,out var handle) || !members.Contains(handle));Drop(Operation("move",target.Id,members:members,index:index));return;}
             // Hit test only stationary permanents; dragged views stay in their preview layer.
-            var other=cards.Where(pair=>pair.Value.Zone=="battlefield" && pair.Value.ControllerId==organization.Viewer && displayOrganization.Handles.TryGetValue(pair.Value.ObjectId,out var handle) && !members.Contains(handle) && pair.Key.style.display.value!=DisplayStyle.None && pair.Key.worldBound.Contains(ev.position)).LastOrDefault();
+            var movingCards=cards.Values.Where(card=>displayOrganization.Handles.TryGetValue(card.ObjectId,out var handle) && members.Contains(handle)).ToArray();
+            var movingIds=new HashSet<string>(movingCards.Select(card=>card.ObjectId),StringComparer.Ordinal);
+            var attachments=new HashSet<string>(movingCards.SelectMany(card=>card.Attachments??Array.Empty<string>()),StringComparer.Ordinal);
+            var other=cards.Where(pair=>pair.Value.Zone=="battlefield" && pair.Value.ControllerId==organization.Viewer
+                && displayOrganization.Handles.TryGetValue(pair.Value.ObjectId,out var handle) && !members.Contains(handle)
+                && !movingIds.Contains(pair.Value.AttachedTo) && !attachments.Contains(pair.Value.ObjectId)
+                && pair.Key.style.display.value!=DisplayStyle.None && pair.Key.worldBound.Contains(ev.position)).LastOrDefault();
             if(other.Key!=null){
                 string handle=displayOrganization.Handles[other.Value.ObjectId];var participants=new[]{handle}.Concat(members).Distinct().ToArray();var anchor=new Vector2(other.Key.resolvedStyle.left,other.Key.resolvedStyle.top);CancelDrag();PromptAt(anchor,participants,host.OrganizationVersion>=3);return;
             }

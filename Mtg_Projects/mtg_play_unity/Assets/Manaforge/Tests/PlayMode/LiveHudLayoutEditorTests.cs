@@ -35,7 +35,7 @@ namespace Manaforge.Play.Tests
             internal int Inputs;
             internal Harness(ObservedStore store=null,ILayoutPresetStore persistentStore=null,bool includeTurns=false)
             {
-                Store=store??new ObservedStore();Root.Add(Canvas);Canvas.style.width=1280;Canvas.style.height=720;
+                Store=store??new ObservedStore();Root.style.width=1280;Root.style.height=720;Root.Add(Canvas);Canvas.style.width=1280;Canvas.style.height=720;Canvas.style.flexShrink=0;
                 foreach(var id in new[]{GameplayHudIds.Priority,GameplayHudIds.Actions,GameplayHudIds.Zones,GameplayHudIds.Commanders}.Concat(includeTurns?new[]{GameplayHudIds.Turns}:Array.Empty<string>())){
                     var drawer=new GameplayDrawer(id,open:true){name=id};drawer.style.position=Position.Absolute;drawer.style.left=30;drawer.style.top=80;drawer.style.width=260;drawer.style.height=30;
                     drawer.Content.Add(new Button(()=>Inputs++){text="Existing command"});Canvas.Add(drawer);Drawers.Add(id,drawer);
@@ -219,7 +219,7 @@ namespace Manaforge.Play.Tests
             var node=new GameObject("Viewport recovery");var settings=ScriptableObject.CreateInstance<PanelSettings>();settings.themeStyleSheet=Resources.Load<ThemeStyleSheet>("CardTheme");var doc=node.AddComponent<UIDocument>();doc.panelSettings=settings;
             using var h=new Harness();doc.rootVisualElement.Add(h.Root);
             try{
-                for(int i=0;i<4;i++)yield return null;h.Editor.AfterLegacyLayout();Assert.That(h.Editor.Open(),Is.True);
+                for(int i=0;i<4;i++)yield return null;h.Editor.AfterLegacyLayout();Assert.That(h.Editor.Open(),Is.True);yield return null;
                 int displayKeys=0;EventCallback<KeyDownEvent> display=ev=>{if(ev.keyCode==KeyCode.F11)displayKeys++;};h.Root.RegisterCallback(display,TrickleDown.TrickleDown);
                 using(var key=KeyDownEvent.GetPooled('\0',KeyCode.F11,EventModifiers.None)){var field=h.Root.Q("layout-editor-component");key.target=field;field.SendEvent(key);}
                 h.Root.UnregisterCallback(display,TrickleDown.TrickleDown);Assert.That(displayKeys,Is.EqualTo(1),"F11 must reach display controls while editing");

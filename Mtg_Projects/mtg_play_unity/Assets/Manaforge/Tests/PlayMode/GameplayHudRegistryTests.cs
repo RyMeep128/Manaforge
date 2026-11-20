@@ -69,10 +69,10 @@ namespace Manaforge.Play.Tests
             var root=new VisualElement();using var arena=new ArenaGameplayPresentation(root);
             var registry=arena.HudRegistry;
             foreach(string id in new[]{GameplayHudIds.Hand,GameplayHudIds.Players,GameplayHudIds.Commanders,
-                GameplayHudIds.Priority,GameplayHudIds.Actions,GameplayHudIds.Zones,GameplayHudIds.Library,
+                GameplayHudIds.Turns,GameplayHudIds.Priority,GameplayHudIds.Actions,GameplayHudIds.Zones,GameplayHudIds.Library,
                 GameplayHudIds.Graveyard,GameplayHudIds.Exile,GameplayHudIds.Battlefield,GameplayHudIds.GameStack})
                 Assert.That(registry.Find(id),Is.Not.Null,id);
-            Assert.That(registry.Count,Is.EqualTo(11));
+            Assert.That(registry.Count,Is.EqualTo(12));
             Assert.That(registry.Find(GameplayHudIds.Hand).Element,Is.Null);
             Assert.That(registry.Find(GameplayHudIds.Zones).Element.name,Is.EqualTo("zones-drawer"));
             Assert.That(registry.Find(GameplayHudIds.Library).Element,Is.SameAs(root.Q<GameplayZonePanel>()));

@@ -67,7 +67,7 @@ namespace Manaforge.Play.Tests
         {
             for(int mode=0;mode<2;mode++)using(var peer=new ViewerSessionHostTests.Peer(Frame(hidden:mode==0,faceDown:mode==1))) {
                 var owner=Signal();var host=Start(peer,owner.Task);yield return Until(()=>{host.Tick();return surface.CardsRoot.childCount==1;});for(int i=0;i<5;i++){host.Tick();yield return null;}
-                Assert.That(host.Inspect("fixture-0002"),Is.EqualTo(mode!=0));Assert.That(surface.InspectionView.Q<Image>("artwork").image,Is.Null);host.Dispose();yield return Until(()=>host.Completion.IsCompleted);
+                Assert.That(host.Inspect("fixture-0002"),Is.False);Assert.That(surface.InspectionView.Q<Image>("artwork").image,Is.Null);host.Dispose();yield return Until(()=>host.Completion.IsCompleted);
             }
         }
         [UnityTest] public IEnumerator ReplacementEpochCreatesItsOwnTextureAndRetiresThePreviousCache()

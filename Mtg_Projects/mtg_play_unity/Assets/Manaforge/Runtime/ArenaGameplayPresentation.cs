@@ -157,7 +157,7 @@ namespace Manaforge.Play
             seenStack.Clear();stackFocused=false;stackAttentionUntil=0;stackToolbar.style.display=stackBackdrop.style.display=DisplayStyle.None;hud?.ClearPresentation();ClearCardFocus();inspecting=false;inspector?.Hide(false);CloseInspection();openZone=openZoneOwner=null;opponentHand.Clear();animations?.Clear();links.MarkDirtyRepaint();
             zoneDrawer?.ClearBinding();
             root.RemoveFromClassList("browsing-public-zone");frame=null;dismissedZoneDecision=null;rowPages.Clear();handOrder.Clear();
-            zonePanel.ClearBinding();actionBinding?.Reset();priorityDrawer.Reset();zonePanelDrawer.Reset(true);
+            zonePanel.ClearBinding();if(actionBinding!=null)actionBinding.Reset();else actionDrawer.Reset();priorityDrawer.Reset();zonePanelDrawer.Reset(true);
 
         }
         private Label Label(string name,string text){var label=new Label(text){name=name,enableRichText=false};root.Add(label);return label;}

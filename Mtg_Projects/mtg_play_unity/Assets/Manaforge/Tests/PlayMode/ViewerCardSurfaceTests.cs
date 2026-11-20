@@ -43,9 +43,9 @@ namespace Manaforge.Play.Tests
             if(!hidden && typeLine!=null)card["characteristics"]["type_line"]=typeLine;
             return ViewerCardProjection.ParseSnapshot(message.ToString(),session,viewer,0,true);
         }
-        [Test] public void HiddenObjectsUseSharedBackAndCannotBeInspected()
+        [UnityTest] public IEnumerator HiddenObjectsUseSharedBackAndCannotBeInspected()
         {
-            var ticket=surface.BeginViewer("fixture-0001","one");
+            var ticket=surface.BeginViewer("fixture-0001","one");yield return null;yield return null;
             Assert.That(surface.TryPresent(ticket,Frame(hidden:true)),Is.True);
             var card=surface.CardsRoot.Q<CardView>();Assert.That(card.Q<CardBackView>().image,Is.Not.Null);Assert.That(card.Artwork,Is.Null);
             Assert.That(surface.Inspect(ticket,"fixture-0002"),Is.False);
@@ -165,7 +165,7 @@ namespace Manaforge.Play.Tests
             var message=(JObject)corpus["positive"][0]["envelope"].DeepClone();var snapshot=message["body"]["snapshot"];
             snapshot["session_id"]="fixture-0001";snapshot["viewer_id"]="one";snapshot["revision"]=1;snapshot["decision"]=null;snapshot["actions"]=new JArray();snapshot["objects"][0]["commander_id"]="commander-one";
             snapshot["commanders"]=new JArray(new JObject{["commander_id"]="commander-one",["owner_id"]="one",["name"]="A very long commander name that must not cover the table",["card_identity"]=null,["command_zone_plays"]=2,["additional_cast_cost"]="{4}",["damage_dealt"]=new JArray(new JArray("one",0),new JArray("two",7))});
-            var ticket=surface.BeginViewer("fixture-0001","one");Assert.That(surface.TryPresent(ticket,ViewerCardProjection.ParseSnapshot(message.ToString(),"fixture-0001","one",0,true)),Is.True);
+            var ticket=surface.BeginViewer("fixture-0001","one");yield return null;yield return null;Assert.That(surface.TryPresent(ticket,ViewerCardProjection.ParseSnapshot(message.ToString(),"fixture-0001","one",0,true)),Is.True);
             var dashboard=new CommanderDashboard();host.GetComponent<UIDocument>().rootVisualElement.Add(dashboard);dashboard.style.width=232;dashboard.style.height=140;
             try{dashboard.Present(ViewerDecisionProjection.ParseSnapshot(message.ToString(),"fixture-0001","one",0,true),surface);yield return null;
                 Assert.That(dashboard.Q<ManaCostView>("commander-tax").Cost,Is.EqualTo("{4}"));Assert.That(dashboard.Query<ProgressBar>().ToList().Count,Is.EqualTo(2));
@@ -246,7 +246,7 @@ namespace Manaforge.Play.Tests
             Assert.That(surface.Inspect(ticket,"fixture-0002"),Is.True);Assert.That(surface.InspectionView.Q<Label>("rules").text,Is.EqualTo("Not complete Oracle text"));
             Assert.That(surface.TryPresent(ticket,Frame(revision:2,name:"Changed")),Is.True);
             Assert.That(surface.CardsRoot.Q<CardView>(),Is.SameAs(view));Assert.That(view.Q<Label>("name").text,Is.EqualTo("Changed"));
-            Assert.That(surface.InspectionView.Q<Label>("name").text,Is.Empty);
+            Assert.That(surface.InspectionView.Q<Label>("name").text,Is.EqualTo("Changed"));
             view.SetLiveMarkers("Private counter 2");
             Assert.That(surface.TryPresent(ticket,Frame(revision:3,hidden:true)),Is.True);
             foreach(var label in view.Query<Label>().ToList())Assert.That(label.text,Is.Empty);

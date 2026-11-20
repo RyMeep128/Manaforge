@@ -173,7 +173,7 @@ namespace Manaforge.Play
                 }
                 foreach(var oldView in retainedViews.Values)oldView.Dispose();
                 if(inspectedObject!=null){
-                    if(cards.TryGetValue(inspectedObject,out var inspected) && !inspected.Hidden && inspected.FaceDown==false){Bind(InspectionView,inspected);InspectionView.style.rotate=new Rotate(new Angle(0));}
+                    if(cards.TryGetValue(inspectedObject,out var inspected) && !inspected.Hidden && inspected.FaceDown!=true){Bind(InspectionView,inspected);InspectionView.style.rotate=new Rotate(new Angle(0));}
                     else{InspectionView.Conceal();inspectedObject=null;}
                 }else if(inspectedKey!=null)InspectionView.Conceal();
                 revision=frame.Context.Revision;ticket.Mailbox.ObserveAppliedFrame(revision);return true;

@@ -67,10 +67,9 @@ namespace Manaforge.Play.Tests
                     yield return null;Capture(target,$"battlefield-previous-fixed-margins-{size.x}x{size.y}");
                     arena.Present(frame);root.Q<GameplayPlayerHud>().Present(frame,arena.Surface,"commander");yield return null;
                     var localSeat=root.Q<PlayerPanel>("local-seat");
-                    Assert.That(localSeat.parent.name,Is.EqualTo("hud-local-player"));
-                    Assert.That(localSeat.worldBound.xMin-root.worldBound.xMin,Is.LessThan(24));
-                    Assert.That(root.worldBound.yMax-localSeat.worldBound.yMax,Is.InRange(12,24));
-                    Assert.That(root.Q("hud-players").worldBound.yMax,Is.LessThan(localSeat.worldBound.yMin));
+                    var life=root.Q<GameplayDrawer>("player-life-drawer");
+                    Assert.That(life.Content.Contains(localSeat),Is.True);Assert.That(life.IsOpen,Is.True);
+                    Assert.That(root.worldBound.Contains(localSeat.worldBound.center),Is.True);
                     var cardBounds=arena.Surface.CardsRoot.worldBound;
                     var placements=new Dictionary<CardView,(float x,float y,float width,float height,DisplayStyle display)>();
                     arena.Surface.VisitPresented((card,view)=>placements[view]=(view.style.left.value.value,view.style.top.value.value,view.style.width.value.value,view.style.height.value.value,view.style.display.value));
@@ -98,7 +97,7 @@ namespace Manaforge.Play.Tests
                     }
                     Assert.That(zones.Q<ScrollView>("zone-panel-scroll").horizontalScrollerVisibility,Is.EqualTo(ScrollerVisibility.Hidden));
                     Assert.That(zones.Q<ScrollView>("zone-panel-scroll").contentViewport.resolvedStyle.width,Is.GreaterThanOrEqualTo(232));
-                    var pile=root.Q<ZonePile>("opponent-library");Assert.That(pile.worldBound.xMin-root.worldBound.xMin,Is.EqualTo(22).Within(2));Assert.That(pile.worldBound.yMin-root.worldBound.yMin,Is.EqualTo(150).Within(2));
+                    var pile=root.Q<GameplayZonePanel>().Query<ZonePile>().ToList().First(p=>p.Zone=="library");Assert.That(pile.worldBound.width,Is.EqualTo(66).Within(2));Assert.That(pile.worldBound.height,Is.EqualTo(92).Within(2));
                     Assert.That(pile.Q<Image>("zone-art").image,Is.Null);Assert.That(pile.Q<Label>("zone-fallback").text,Is.Empty);
                     string directory=Path.Combine(Application.dataPath,"../Artifacts/HudDrawers");Directory.CreateDirectory(directory);
                     yield return null;yield return null;var pixels=new Texture2D(size.x,size.y,TextureFormat.RGBA32,false);
@@ -106,7 +105,7 @@ namespace Manaforge.Play.Tests
                     settings.targetTexture=null;RenderTexture.active=previous;target.Release();UnityEngine.Object.Destroy(target);target=null;
                 }
                 arena.Surface.ClearViewer(ticket);Assert.That(root.Query<PlayerPanel>().ToList(),Is.Empty);Assert.That(root.Query<ZonePile>().ToList(),Is.Empty);
-                foreach(var drawer in new[]{action,priority,zones,commanders})Assert.That(drawer.IsOpen,Is.False);
+                foreach(var drawer in new[]{action,priority,commanders})Assert.That(drawer.IsOpen,Is.False);Assert.That(zones.IsOpen,Is.True,"The zone bank returns to its visible default");
             }finally{settings.targetTexture=null;RenderTexture.active=previous;if(target!=null){target.Release();UnityEngine.Object.Destroy(target);}UnityEngine.Object.Destroy(node);UnityEngine.Object.Destroy(settings);}yield return null;
         }
     }

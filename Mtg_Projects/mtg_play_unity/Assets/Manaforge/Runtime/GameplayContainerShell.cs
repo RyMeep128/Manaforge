@@ -97,6 +97,7 @@ namespace Manaforge.Play
         private ContainerLayoutState original,candidate;
         private bool resize,deliberate,committing,disposed;
         private VisualElement captured;
+        private IVisualElementScheduledItem captureWatch;
         private int pointer;
         public bool IsActive=>active!=null;
         public string ActiveId=>active;
@@ -128,13 +129,13 @@ namespace Manaforge.Play
             EventCallback<PointerDownEvent> down=ev=>{
                 if(ev.button!=0 || !handle.enabledInHierarchy)return;
                 if(!Begin(id,canvas.WorldToLocal(ev.position),sizing,currentDirection?.Invoke()??direction,drawerHeight?.Invoke()))return;
-                captured=handle;pointer=ev.pointerId;handle.CapturePointer(pointer);handle.Focus();ev.StopPropagation();
+                captured=handle;pointer=ev.pointerId;handle.CapturePointer(pointer);captureWatch=handle.schedule.Execute(()=>{if(captured==handle && !handle.HasPointerCapture(pointer))Cancel();}).Every(1);handle.Focus();ev.StopPropagation();
             };
             EventCallback<PointerMoveEvent> move=ev=>{if(captured!=handle || ev.pointerId!=pointer)return;Move(canvas.WorldToLocal(ev.position),ev.shiftKey,ev.ctrlKey,dockOnDrag || ev.altKey);ev.StopPropagation();};
             EventCallback<PointerUpEvent> up=ev=>{if(captured!=handle || ev.pointerId!=pointer)return;Move(canvas.WorldToLocal(ev.position),ev.shiftKey,ev.ctrlKey,dockOnDrag || ev.altKey);Commit();ev.StopPropagation();};
             EventCallback<PointerCaptureOutEvent> lost=ev=>{if(captured==handle)Cancel();};
-            handle.RegisterCallback(down);handle.RegisterCallback(move);handle.RegisterCallback(up);handle.RegisterCallback(lost);
-            unbind.Add(()=>{handle.UnregisterCallback(down);handle.UnregisterCallback(move);handle.UnregisterCallback(up);handle.UnregisterCallback(lost);});
+            handle.RegisterCallback(down,TrickleDown.TrickleDown);handle.RegisterCallback(move,TrickleDown.TrickleDown);handle.RegisterCallback(up,TrickleDown.TrickleDown);handle.RegisterCallback(lost);
+            unbind.Add(()=>{handle.UnregisterCallback(down,TrickleDown.TrickleDown);handle.UnregisterCallback(move,TrickleDown.TrickleDown);handle.UnregisterCallback(up,TrickleDown.TrickleDown);handle.UnregisterCallback(lost);});
         }
         public bool Begin(string id,Vector2 position,bool sizing=false,Vector2 direction=default,float? presentedHeight=null)
         {
@@ -203,7 +204,7 @@ namespace Manaforge.Play
         public void Cancel(){Release();render(controller.Resolved);}
         private void Release()
         {
-            var old=captured;captured=null;active=null;candidate=null;deliberate=false;DockPreviewTarget=null;DockPreviewEdge=ContainerDockEdge.None;
+            captureWatch?.Pause();captureWatch=null;var old=captured;captured=null;active=null;candidate=null;deliberate=false;DockPreviewTarget=null;DockPreviewEdge=ContainerDockEdge.None;
             if(old!=null && old.HasPointerCapture(pointer))old.ReleasePointer(pointer);
         }
         public void Dispose()

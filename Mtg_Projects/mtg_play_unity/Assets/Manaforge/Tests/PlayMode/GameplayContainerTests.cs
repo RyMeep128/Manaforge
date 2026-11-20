@@ -26,7 +26,7 @@ namespace Manaforge.Play.Tests
             workspace.style.width=1000;workspace.style.height=650;doc.rootVisualElement.Add(workspace);
             try{
                 for(int i=0;i<5;i++)yield return null;var shell=workspace.Shell("drawer");var field=shell.BorrowedContent.Q<TextField>();
-                field.value="Kept across conversions";field.Focus();yield return null;
+                var originalPicking=field.pickingMode;field.value="Kept across conversions";field.Focus();yield return null;
                 var original=shell.BorrowedContent;var state=workspace.Controller.State("drawer");
                 workspace.Controller.TrySet(new ContainerLayoutState("drawer",state.FloatingRect,ContainerMode.Drawer));yield return null;
                 Assert.That(shell.Drawer.Content.Contains(original),Is.True);Assert.That(field.value,Is.EqualTo("Kept across conversions"));
@@ -34,10 +34,10 @@ namespace Manaforge.Play.Tests
                 Assert.That(field.pickingMode,Is.EqualTo(PickingMode.Ignore));Assert.That(field.focusable,Is.False);
                 Assert.That(doc.rootVisualElement.panel.focusController.focusedElement,Is.SameAs(shell.Drawer.Tab));
                 workspace.Controller.TrySet(new ContainerLayoutState("drawer",state.FloatingRect));yield return null;
-                Assert.That(field.pickingMode,Is.EqualTo(PickingMode.Position));
+                Assert.That(field.pickingMode,Is.EqualTo(originalPicking));
                 workspace.Controller.TrySet(new ContainerLayoutState("drawer",state.FloatingRect,ContainerMode.Drawer));yield return null;
                 Assert.That(shell.Drawer.IsOpen,Is.False);Assert.That(shell.BorrowedContent,Is.SameAs(original));
-                workspace.Dispose();Assert.That(original.parent,Is.Null);Assert.That(field.pickingMode,Is.EqualTo(PickingMode.Position));
+                workspace.Dispose();Assert.That(original.parent,Is.Null);Assert.That(field.pickingMode,Is.EqualTo(originalPicking));
             }finally{UnityEngine.Object.Destroy(node);UnityEngine.Object.Destroy(settings);}
         }
         [Test] public void GesturePreviewCommitCancelAndResizeUseOneTransaction()

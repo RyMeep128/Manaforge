@@ -26,12 +26,12 @@ or install a persistent runner service.
 
 The Java fixture peer is compiled for Unity exchange tests without running the
 standalone Java protocol suite locally. All Unity validation stages from the
-former Unity workflow are retained: EditMode,
-graphics-enabled PlayMode, Windows build, player smoke, theme captures, payment
-modes, pile and other choices, public artwork preview, a normal shuffled human
+former Unity workflow are retained: graphics-enabled EditMode and PlayMode,
+Windows build, player smoke, theme captures, payment modes, pile and other
+choices, public artwork preview, a normal shuffled human
 versus AI match, concession, authenticated decision UI, and multiplayer in
 freeform and Commander. A failed stage stops the run and records failure.
-PlayMode graphics checks require all tests to execute without skips.
+Graphics-enabled EditMode and PlayMode require all tests to execute without skips.
 
 Logs and the stage report are under `Artifacts/UnityLocal/<run-id>/`.
 Unity test XML and screenshots remain under

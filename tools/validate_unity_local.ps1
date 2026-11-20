@@ -60,7 +60,7 @@ try {
         finally { [IO.File]::WriteAllBytes($scenePath, $sceneBefore) }
     }
     Invoke-Stage 'Focused EditMode tests' {
-        ./tools/unity-play.ps1 -Mode EditMode -DownloadGson
+        ./tools/unity-play.ps1 -Mode EditMode -Graphics -DownloadGson
     }
     Invoke-Stage 'Focused PlayMode test' {
         ./tools/unity-play.ps1 -Mode PlayMode -Graphics
