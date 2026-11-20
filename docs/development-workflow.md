@@ -19,7 +19,7 @@ playable human-versus-AI acceptance coverage must be considered when applicable.
 Opening or fixture success alone does not establish playable acceptance. Missing,
 skipped, cancelled, unavailable or incomplete checks do not count as passing.
 Report code failures and runner, licensing or infrastructure blocks accurately.
-See [hosted Unity setup](unity-ci.md) for the Windows runner and Personal license secrets.
+See [Unity CI setup](unity-ci.md) for Windows runners and supported license activation options.
 
 Full CI can take 30–40 minutes. Start the requested workflows and report their
 links; the owner will notify the agent when execution is complete. Do not poll or

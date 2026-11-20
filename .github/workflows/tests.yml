@@ -5,6 +5,10 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
+      use_verified_unity_player:
+        description: Package the successful Unity workflow player for this exact commit
+        type: boolean
+        default: false
       skip_tests:
         description: Skip tests and smoke checks for this explicitly requested manual build
         type: boolean
@@ -31,6 +35,9 @@ on:
         default: ''
   workflow_call:
     inputs:
+      use_verified_unity_player:
+        type: boolean
+        default: false
       skip_tests:
         type: boolean
         default: false
@@ -147,17 +154,24 @@ jobs:
           distribution: temurin
           java-version: '23.0.2+7'
       - name: Install and activate pinned Unity editor
+        if: ${{ !inputs.use_verified_unity_player }}
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         run: ./tools/setup_unity_ci.ps1
+      - name: Download exact-revision validated Unity player
+        if: ${{ inputs.use_verified_unity_player }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python tools/prepare_verified_unity_player.py --repository $env:GITHUB_REPOSITORY --commit $env:GITHUB_SHA
       - name: Prepare and build matching Unity player
+        if: ${{ !inputs.use_verified_unity_player }}
         run: |
           ./tools/unity-play.ps1 -Mode Prepare
           ./tools/unity-play.ps1 -Mode Build
       - name: Verify matching Unity player
-        if: ${{ !inputs.skip_tests }}
+        if: ${{ !inputs.skip_tests && !inputs.use_verified_unity_player }}
         run: |
           ./tools/unity-play.ps1 -Mode EditMode -DownloadGson
           ./tools/unity-play.ps1 -Mode PlayMode -Graphics

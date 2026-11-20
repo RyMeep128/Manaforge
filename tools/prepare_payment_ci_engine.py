@@ -68,7 +68,12 @@ def main():
     if released_bundle(args.destination, lock):
         print("Prepared exact pinned engine from a durable public prerelease")
         return
-    expected = lock["ci_artifact_sha256"]
+    expected = lock.get("ci_artifact_sha256")
+    if not expected:
+        raise SystemExit(
+            "DELIVERY_ENGINE_CI_PIN_MISSING: the approved engine was built locally; "
+            "import the exact source revision's verified CI archive before publishing"
+        )
     headers = {
         "Accept": "application/vnd.github+json",
         "User-Agent": "Manaforge-payment-CI",

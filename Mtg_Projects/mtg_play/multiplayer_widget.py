@@ -781,6 +781,7 @@ class MultiplayerPanel(W.QWidget):
         # Cancellation can synchronously report SESSION_EOF. Retain the cause
         # that prompted cleanup rather than replacing it with GAME_INTERRUPTED.
         self.failure_code = code
+        self.finished = True
         self.jobs.cancel_all()
         if self.tunnel:
             self.tunnel.close()
