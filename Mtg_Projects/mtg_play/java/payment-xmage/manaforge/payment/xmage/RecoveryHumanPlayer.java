@@ -31,10 +31,19 @@ public class RecoveryHumanPlayer extends HumanPlayer {
     static List<RecoveryHumanPlayer> live(UUID game){List<RecoveryHumanPlayer> result=new ArrayList<>();Map<UUID,WeakReference<RecoveryHumanPlayer>> rows=live.get(game);if(rows!=null)for(WeakReference<RecoveryHumanPlayer> ref:rows.values()){RecoveryHumanPlayer player=ref.get();if(player!=null)result.add(player);}return result;}
     void wakeRecovery(){try{Field field=HumanPlayer.class.getDeclaredField("response");field.setAccessible(true);Object response=field.get(this);synchronized(response){response.notifyAll();}}catch(ReflectiveOperationException failure){throw new IllegalStateException("RECOVERY_RESPONSE_LAYOUT_CHANGED",failure);}}
     boolean waitingForResponse(){try{Field responseField=HumanPlayer.class.getDeclaredField("response"),open=HumanPlayer.class.getDeclaredField("responseOpenedForAnswer");responseField.setAccessible(true);open.setAccessible(true);Object response=responseField.get(this);synchronized(response){return Boolean.TRUE.equals(open.get(this));}}catch(ReflectiveOperationException failure){throw new IllegalStateException("RECOVERY_RESPONSE_LAYOUT_CHANGED",failure);}}
+    private transient volatile String nativeResponseMethod;
+    /** Native HumanPlayer caller, retained while the recovery wrapper adds a stack frame. */
+    public final String nativeResponseMethod(){return nativeResponseMethod;}
     @Override protected void waitForResponse(Game game){
         NativeMatchRecovery.boundary(this,game);
         if(NativeMatchRecovery.ai(game,getId()))throw new NativeMatchRecovery.Handoff();
-        super.waitForResponse(game);
+        nativeResponseMethod=null;
+        for(StackTraceElement frame:Thread.currentThread().getStackTrace()){
+            if(frame.getClassName().equals(HumanPlayer.class.getName())){
+                nativeResponseMethod=frame.getMethodName();break;
+            }
+        }
+        try{super.waitForResponse(game);}finally{nativeResponseMethod=null;}
         NativeMatchRecovery.boundary(this,game);
         if(NativeMatchRecovery.ai(game,getId()))throw new NativeMatchRecovery.Handoff();
     }

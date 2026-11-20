@@ -252,15 +252,20 @@ public final class ManaforgeGameMetadata {
                 // Confirm the engine is waiting in HumanPlayer.priority(), not a
                 // generic GAME_SELECT choice. Never export the diagnostic string.
                 Object activeAction = response.getClass().getMethod("getActiveAction").invoke(response);
+                // The recovery override shifts XMage's fixed-depth diagnostic stack lookup.
+                // Its native caller is captured on the game thread before opening this response.
+                String responseMethod=human instanceof manaforge.payment.xmage.RecoveryHumanPlayer
+                        ? ((manaforge.payment.xmage.RecoveryHumanPlayer)human).nativeResponseMethod()
+                        : activeAction instanceof String && ((String)activeAction).contains(" - HumanPlayer.java:")
+                            ? ((String)activeAction).split(" - ",2)[0] : null;
                 boolean priorityOpen = player.getId().equals(playerId)
                         && playerId.equals(game.getPriorityPlayerId())
-                        && activeAction instanceof String
-                        && ((String) activeAction).startsWith("priority - HumanPlayer.java:");
+                        && "priority".equals(responseMethod);
                 JsonObject result = status("ok"); result.addProperty("cycle", cycle);
                 result.addProperty("priority_open", priorityOpen);
                 // Match the pinned HumanPlayer selection branches under the same response monitor.
                 // Native requirement effects still decide whether an attacker click can remove it.
-                String declaration=activeAction instanceof String && ((String)activeAction).startsWith("selectAttackers - HumanPlayer.java:")?"attackers":activeAction instanceof String && ((String)activeAction).startsWith("selectBlockers - HumanPlayer.java:")?"blockers":null;
+                String declaration="selectAttackers".equals(responseMethod)?"attackers":"selectBlockers".equals(responseMethod)?"blockers":null;
                 if(declaration!=null && player.getId().equals(playerId) && game.getStack().isEmpty()) {
                     JsonArray reselect=new JsonArray();
                     for(UUID id:permitted.getMyPlayer().getBattlefield().keySet()) {

@@ -18,7 +18,12 @@ public final class NativeMultiViewerChecks {
         long end=System.nanoTime()+TimeUnit.SECONDS.toNanos(10);PlayerQueryEvent query=null;
         while(query==null && System.nanoTime()<end){if(e.running.isDone())e.running.get();query=e.queries.poll(20,TimeUnit.MILLISECONDS);}
         check(query!=null && query.getQueryType().name().equals("SELECT") && query.getPlayerId().equals(e.payer.getId()),"NATIVE_PRIORITY_QUERY");
-        while(System.nanoTime()<end){if(e.running.isDone())e.running.get();synchronized(e.response.get(e.payer)){if(Boolean.TRUE.equals(e.opened.get(e.payer)))return query;}Thread.yield();}
+        while(System.nanoTime()<end){if(e.running.isDone())e.running.get();synchronized(e.response.get(e.payer)){if(Boolean.TRUE.equals(e.opened.get(e.payer))){
+            JsonObject request=new JsonObject();request.add("object_ids",new JsonArray());request.add("identified_ids",new JsonArray());
+            JsonObject guard=ManaforgeGameMetadata.readPaused(e.game,e.payer.getId(),e.game.getState().getApplyEffectsCounter(),request,()->new GameView(e.game.getState(),e.game,e.payer.getId(),null));
+            check(new JsonPrimitive("ok").equals(guard.get("status")) && new JsonPrimitive(true).equals(guard.get("priority_open")),"RECOVERY_WRAPPED_NATIVE_PRIORITY_UNPROVEN");
+            return query;
+        }}Thread.yield();}
         throw new AssertionError("NATIVE_PRIORITY_NOT_PAUSED");
     }
     static void resume(NativePaymentAcceptanceChecks.Engine e) throws Exception {e.payer.setResponseBoolean(false);e.running.get(5,TimeUnit.SECONDS);check(e.queries.isEmpty(),"NATIVE_PRIORITY_NOT_CONSUMED");}

@@ -31,12 +31,12 @@ namespace Manaforge.Play
             if(artwork)foreach(var card in surface.CardsRoot.Query<CardView>().ToList())card.Q<Label>("status").style.display=DisplayStyle.None;
             fanWidth=width;fanCount=count;fanRevision=revision;fanArtwork=images;
         }
-        private Button InputButton(string name)=>selectAttacker?panel.Root.Query<Button>().ToList().Find(button=>button.text=="Select attacker"):combatFinish?panel.Root.Query<Button>().ToList().Find(button=>button.text=="Finish attacks"):priority?panel.Root.Query<Button>().ToList().Find(button=>button.text=="Pass priority"):panel.Root.Q<Button>(name);
+        private Button InputButton(string name)=>selectAttacker?DecisionControls().Find(button=>button.text=="Select attacker"):combatFinish?DecisionControls().Find(button=>button.text=="Finish attacks"):priority?DecisionControls().Find(button=>button.text=="Pass priority"):panel.Root.Q<Button>(name);
         private void LimitActions()
         {
-            if(selectAttacker){foreach(var button in panel.Root.Query<Button>().ToList())button.style.display=button.text=="Select attacker"?DisplayStyle.Flex:DisplayStyle.None;return;}
+            if(selectAttacker){foreach(var button in DecisionControls())button.style.display=button.text=="Select attacker"?DisplayStyle.Flex:DisplayStyle.None;return;}
             if(!land)return;
-            foreach(var button in panel.Root.Query<Button>().ToList())if(button.name.StartsWith("decision-action-"))button.style.display=(priority?button.text=="Pass priority":button.text!="Pass priority")?DisplayStyle.Flex:DisplayStyle.None;
+            foreach(var button in DecisionControls())if(button.name.StartsWith("decision-action-"))button.style.display=(priority?button.text=="Pass priority":button.text!="Pass priority")?DisplayStyle.Flex:DisplayStyle.None;
         }
         private bool BlockerNamesPresented(){string summary=Volatile.Read(ref blockerSummary);return postDeclaredPriorityPresented && !string.IsNullOrEmpty(summary) && !summary.Contains("Unknown blocker");}
         private bool Report(string name,bool cleared=false)
@@ -132,7 +132,7 @@ namespace Manaforge.Play
             LimitActions();
             if(OpeningLayout){
                 var question=panel.Root.Q<Label>("decision-prompt");question.text=OpeningHandFan.PlainPrompt(question.text);
-                foreach(var button in panel.Root.Query<Button>().ToList()){
+                foreach(var button in DecisionControls()){
                     button.style.width=OpeningMulliganControls.ButtonWidth;button.style.height=OpeningMulliganControls.ButtonHeight;button.style.fontSize=24;button.style.marginLeft=OpeningMulliganControls.ButtonMargin;button.style.marginRight=OpeningMulliganControls.ButtonMargin;button.style.paddingTop=0;button.style.paddingBottom=0;
                     button.style.borderTopLeftRadius=button.style.borderTopRightRadius=button.style.borderBottomLeftRadius=button.style.borderBottomRightRadius=20;
                     button.style.backgroundColor=button.name=="decision-option-0"?new Color(.22f,.25f,.85f):new Color(.95f,.36f,.08f);
@@ -164,7 +164,7 @@ namespace Manaforge.Play
                 PresentOpening();
                 cardFocus?.RefreshBounds();
                 if(continuePriority && !followupPresented && Volatile.Read(ref snapshots)>=2){
-                    var pass=panel.Root.Query<Button>().ToList().Find(button=>button.text=="Pass priority");
+                    var pass=DecisionControls().Find(button=>button.text=="Pass priority");
                     if(pass!=null && pass.enabledInHierarchy && host.PresentedDecision?.CanSubmit==true){
                         followupPresented=true;inspect.Clear();
                         foreach(var card in surface.CardsRoot.Children())if(card is CardView view)view.SetPresentation(CardPresentationMode.Compact,135);
@@ -174,7 +174,7 @@ namespace Manaforge.Play
                     }
                 }
                 if(observeResolution && !battlefieldPresented && Volatile.Read(ref snapshots)==3 && host.HasPresentedRevision(Interlocked.Read(ref snapshotRevision))){
-                    var buttons=panel.Root.Query<Button>().ToList();var postPass=buttons.Find(button=>button.text=="Pass priority");
+                    var buttons=DecisionControls();var postPass=buttons.Find(button=>button.text=="Pass priority");
                     if(postResolutionPass?(buttons.Count!=1 || postPass==null || !postPass.enabledInHierarchy || host.PresentedDecision?.CanSubmit!=true):(host.PresentedDecision!=null || buttons.Count!=0)){Fail();yield break;}
                     battlefieldPresented=true;inspect.Clear();
                     foreach(var card in surface.CardsRoot.Children())if(card is CardView view)view.SetPresentation(CardPresentationMode.Compact,135);
@@ -183,7 +183,7 @@ namespace Manaforge.Play
                     if(postResolutionPass && ArtworkFixtureScene.Argument("-manaforgeLiveScript")=="1")using(var input=NavigationSubmitEvent.GetPooled()){input.target=postPass;postPass.SendEvent(input);}
                 }
                 if(postResolutionPass && !phasePresented && Volatile.Read(ref snapshots)==4 && host.HasPresentedRevision(Interlocked.Read(ref snapshotRevision))){
-                    if(host.PresentedDecision!=null || panel.Root.Query<Button>().ToList().Count!=0){Fail();yield break;}
+                    if(host.PresentedDecision!=null || DecisionControls().Count!=0){Fail();yield break;}
                     phasePresented=true;inspect.Clear();
                     foreach(var card in surface.CardsRoot.Children())if(card is CardView view)view.SetPresentation(CardPresentationMode.Compact,135);
                     status.text="The exact pass is confirmed; XMage advanced its phase or step. Read-only state.";
@@ -191,7 +191,7 @@ namespace Manaforge.Play
                 }
                 if(selectAttacker && !attackAssignmentPresented && Volatile.Read(ref snapshots)==2 && host.HasPresentedRevision(Interlocked.Read(ref snapshotRevision))){
                     string summary=Volatile.Read(ref attackAssignmentSummary);
-                    var controls=panel.Root.Query<Button>().ToList();var finish=controls.Find(button=>button.text=="Finish attacks");
+                    var controls=DecisionControls();var finish=controls.Find(button=>button.text=="Finish attacks");
                     if(summary==null || (finishSelectedAttack?(controls.Count!=1 || finish==null || !finish.enabledInHierarchy || host.PresentedDecision?.CanSubmit!=true):(host.PresentedDecision!=null || controls.Count!=0))){Fail();yield break;}
                     attackAssignmentPresented=true;inspect.Clear();
                     foreach(var card in surface.CardsRoot.Children())if(card is CardView view)view.SetPresentation(CardPresentationMode.Compact,135);
@@ -200,7 +200,7 @@ namespace Manaforge.Play
                     if(finishSelectedAttack && ArtworkFixtureScene.Argument("-manaforgeLiveScript")=="1")using(var input=NavigationSubmitEvent.GetPooled()){input.target=finish;finish.SendEvent(input);}
                 }
                 if(finishSelectedAttack && !declaredAttackPresented && Volatile.Read(ref snapshots)==3 && host.HasPresentedRevision(Interlocked.Read(ref snapshotRevision))){
-                    var controls=panel.Root.Query<Button>().ToList();var pass=controls.Find(button=>button.text=="Pass priority");
+                    var controls=DecisionControls();var pass=controls.Find(button=>button.text=="Pass priority");
                     if(Volatile.Read(ref attackAssignmentSummary)==null || (declaredPriority?(controls.Count!=1 || pass==null || !pass.enabledInHierarchy || host.PresentedDecision?.CanSubmit!=true):(host.PresentedDecision!=null || controls.Count!=0))){Fail();yield break;}
                     declaredAttackPresented=true;inspect.Clear();foreach(var card in surface.CardsRoot.Children())if(card is CardView view)view.SetPresentation(CardPresentationMode.Compact,135);
                     status.text=Volatile.Read(ref attackAssignmentSummary).Replace("Declaration remains open.","Declaration finished; native priority observed.");
@@ -208,7 +208,7 @@ namespace Manaforge.Play
                     if(declaredPriority && ArtworkFixtureScene.Argument("-manaforgeLiveScript")=="1")using(var input=NavigationSubmitEvent.GetPooled()){input.target=pass;pass.SendEvent(input);}
                 }
                 if(declaredPriority && !postDeclaredPriorityPresented && Volatile.Read(ref snapshots)==4 && host.HasPresentedRevision(Interlocked.Read(ref snapshotRevision))){
-                    var controls=panel.Root.Query<Button>().ToList();var pass=controls.Find(button=>button.text=="Pass priority");
+                    var controls=DecisionControls();var pass=controls.Find(button=>button.text=="Pass priority");
                     if(Volatile.Read(ref attackAssignmentSummary)==null || ((combatDamage || blockedDamage)?(controls.Count!=1 || pass==null || !pass.enabledInHierarchy || host.PresentedDecision?.CanSubmit!=true):(host.PresentedDecision!=null || controls.Count!=0))){Fail();yield break;}
                     if(blockedDamage){blockerDamageBefore=Interlocked.Read(ref blockerDamage);blockedLifeBefore=Interlocked.Read(ref defenderLife);if(blockerDamageBefore!=0 || blockedLifeBefore<0){Fail();yield break;}}
                     if(combatDamage){damageLifeBefore=Interlocked.Read(ref defenderLife);if(damageLifeBefore<=1){Fail();yield break;}}
@@ -220,14 +220,14 @@ namespace Manaforge.Play
                 }
                 if(blockedDamage && !blockedDamagePresented && Volatile.Read(ref snapshots)==5 && host.HasPresentedRevision(Interlocked.Read(ref snapshotRevision))){
                     blockerDamageAfter=Interlocked.Read(ref blockerDamage);blockedLifeAfter=Interlocked.Read(ref defenderLife);
-                    if(host.PresentedDecision!=null || panel.Root.Query<Button>().ToList().Count!=0 || Volatile.Read(ref combatBlockerCount)!=1 || !BlockerNamesPresented() || blockerDamageAfter!=1 || blockedLifeAfter!=blockedLifeBefore){Fail();yield break;}
+                    if(host.PresentedDecision!=null || DecisionControls().Count!=0 || Volatile.Read(ref combatBlockerCount)!=1 || !BlockerNamesPresented() || blockerDamageAfter!=1 || blockedLifeAfter!=blockedLifeBefore){Fail();yield break;}
                     blockedDamagePresented=true;inspect.Clear();foreach(var card in surface.CardsRoot.Children())if(card is CardView view)view.SetPresentation(CardPresentationMode.Compact,135);
                     status.text=Volatile.Read(ref blockerSummary)+" native marked damage: "+blockerDamageBefore+" -> "+blockerDamageAfter+". Defender life remains "+blockedLifeAfter+".";
                     if(capture)yield return Capture("blocked-damage.png");if(!Report("blocked-damage-ready")){Application.Quit(1);yield break;}
                 }
                 if(combatDamage && !combatDamagePresented && Volatile.Read(ref snapshots)==5 && host.HasPresentedRevision(Interlocked.Read(ref snapshotRevision))){
                     damageLifeAfter=Interlocked.Read(ref defenderLife);
-                    var controls=panel.Root.Query<Button>().ToList();var pass=controls.Find(button=>button.text=="Pass priority");
+                    var controls=DecisionControls();var pass=controls.Find(button=>button.text=="Pass priority");
                     if(Volatile.Read(ref attackAssignmentSummary)==null || damageLifeAfter!=damageLifeBefore-1 || (completeCombat?(controls.Count!=1 || pass==null || !pass.enabledInHierarchy || host.PresentedDecision?.CanSubmit!=true):(host.PresentedDecision!=null || controls.Count!=0))){Fail();yield break;}
                     combatDamagePresented=true;inspect.Clear();foreach(var card in surface.CardsRoot.Children())if(card is CardView view)view.SetPresentation(CardPresentationMode.Compact,135);
                     status.text="Confirmed native combat-damage observation. Defender life: "+damageLifeBefore+" -> "+damageLifeAfter+".";
@@ -235,7 +235,7 @@ namespace Manaforge.Play
                     if(completeCombat && ArtworkFixtureScene.Argument("-manaforgeLiveScript")=="1")using(var input=NavigationSubmitEvent.GetPooled()){input.target=pass;pass.SendEvent(input);}
                 }
                 if(completeCombat && !combatCleanupPresented && Volatile.Read(ref snapshots)==6 && host.HasPresentedRevision(Interlocked.Read(ref snapshotRevision))){
-                    var controls=panel.Root.Query<Button>().ToList();var pass=controls.Find(button=>button.text=="Pass priority");
+                    var controls=DecisionControls();var pass=controls.Find(button=>button.text=="Pass priority");
                     if((loopTurn?(controls.Count!=1 || pass==null || !pass.enabledInHierarchy || host.PresentedDecision?.CanSubmit!=true):(host.PresentedDecision!=null || controls.Count!=0)) || Volatile.Read(ref combatGroupCount)!=0 || Interlocked.Read(ref defenderLife)!=damageLifeAfter){Fail();yield break;}
                     if(loopTurn)loopStartTurn=Interlocked.Read(ref turnNumber);
                     combatCleanupPresented=true;inspect.Clear();foreach(var card in surface.CardsRoot.Children())if(card is CardView view)view.SetPresentation(CardPresentationMode.Compact,135);
@@ -243,7 +243,7 @@ namespace Manaforge.Play
                     if(capture)yield return Capture("combat-cleanup.png");if(!Report("combat-cleanup-ready")){Application.Quit(1);yield break;}
                 }
                 if(loopTurn && combatCleanupPresented && (!nextHumanTurnPresented || nextTurnCast && !nextCreaturePresented || repeatCycle && (!repeatedTurnPresented || playRounds>0 && !playRoundsPresented || coreCombat && (!coreCombatPresented || completeGame && !gamePresented))) && host.HasPresentedRevision(Interlocked.Read(ref snapshotRevision))){
-                    long currentRevision=Interlocked.Read(ref snapshotRevision);var controls=panel.Root.Query<Button>().ToList();var cast=controls.Find(value=>value.text.StartsWith("Cast spell",StringComparison.Ordinal));
+                    long currentRevision=Interlocked.Read(ref snapshotRevision);var controls=DecisionControls();var cast=controls.Find(value=>value.text.StartsWith("Cast spell",StringComparison.Ordinal));
                     if(!nextHumanTurnPresented && Volatile.Read(ref snapshots)>6 && (nextTurnCast?(cast!=null && host.PresentedDecision?.CanSubmit==true):(host.PresentedDecision==null && controls.Count==0)) && Volatile.Read(ref activeHuman)==1 && Interlocked.Read(ref turnNumber)==loopStartTurn+2 && Volatile.Read(ref turnPhase)=="PRECOMBAT_MAIN"){
                         nextHumanTurnPresented=true;turnReadySnapshots=Volatile.Read(ref snapshots);inspect.Clear();status.text="Next human main phase reached. Native draw, untap and cleanup observed.";if(!Report("next-human-turn-ready")){Application.Quit(1);yield break;}
                     }
@@ -268,7 +268,7 @@ namespace Manaforge.Play
                     }
                 }
                 if(combatFinish && !combatResultPresented && Volatile.Read(ref snapshots)==2 && host.HasPresentedRevision(Interlocked.Read(ref snapshotRevision))){
-                    var controls=panel.Root.Query<Button>().ToList();var pass=controls.Find(button=>button.text=="Pass priority");
+                    var controls=DecisionControls();var pass=controls.Find(button=>button.text=="Pass priority");
                     if(combatPriority?(controls.Count!=1 || pass==null || !pass.enabledInHierarchy || host.PresentedDecision?.CanSubmit!=true):(host.PresentedDecision!=null || controls.Count!=0)){Fail();yield break;}
                     combatResultPresented=true;inspect.Clear();
                     foreach(var card in surface.CardsRoot.Children())if(card is CardView view)view.SetPresentation(CardPresentationMode.Compact,135);
@@ -277,13 +277,13 @@ namespace Manaforge.Play
                     if(combatPriority && ArtworkFixtureScene.Argument("-manaforgeLiveScript")=="1")using(var input=NavigationSubmitEvent.GetPooled()){input.target=pass;pass.SendEvent(input);}
                 }
                 if(combatPriority && !combatPriorityResultPresented && Volatile.Read(ref snapshots)==3 && host.HasPresentedRevision(Interlocked.Read(ref snapshotRevision))){
-                    if(host.PresentedDecision!=null || panel.Root.Query<Button>().ToList().Count!=0){Fail();yield break;}
+                    if(host.PresentedDecision!=null || DecisionControls().Count!=0){Fail();yield break;}
                     combatPriorityResultPresented=true;inspect.Clear();
                     foreach(var card in surface.CardsRoot.Children())if(card is CardView view)view.SetPresentation(CardPresentationMode.Compact,135);
                     status.text="The post-combat pass is confirmed. The next native state is shown read-only.";
                     if(capture)yield return Capture("combat-priority-result.png");if(!Report("combat-priority-ready")){Application.Quit(1);yield break;}
                 }
-                if(completeGame && !gamePresented && Volatile.Read(ref nativeOutcome)!=null && host.HasPresentedRevision(Interlocked.Read(ref snapshotRevision)) && Volatile.Read(ref snapshotReadOnly)==1 && host.PresentedDecision==null && panel.Root.Query<Button>().ToList().Count==0){
+                if(completeGame && !gamePresented && Volatile.Read(ref nativeOutcome)!=null && host.HasPresentedRevision(Interlocked.Read(ref snapshotRevision)) && Volatile.Read(ref snapshotReadOnly)==1 && host.PresentedDecision==null && DecisionControls().Count==0){
                     if(Volatile.Read(ref nativeOutcome)!="win" && Volatile.Read(ref nativeOutcome)!="loss" && Volatile.Read(ref nativeOutcome)!="draw"){Fail();yield break;}gamePresented=true;status.text="Engine result: "+Volatile.Read(ref nativeOutcome);if(!Report("game-ready")){Application.Quit(1);yield break;}
                 }
                 if(!choiceReported && Volatile.Read(ref acks)>=(completeCombat?10:(combatDamage || blockedDamage)?8:declaredPriority?6:finishSelectedAttack?4:combatPriority?4:postResolutionPass?6:continuePriority?4:2) && (!observeResolution || battlefieldPresented) && (!postResolutionPass || phasePresented) && (!repeatCycle || repeatedTurnPresented) && (playRounds==0 || playRoundsPresented) && (!coreCombat || coreCombatPresented) && (!completeGame || gamePresented) && (!nextTurnCast || nextCreaturePresented) && (!loopTurn || nextHumanTurnPresented) && (!blockedDamage || blockedDamagePresented) && (!completeCombat || combatCleanupPresented) && (!combatDamage || combatDamagePresented) && (!declaredPriority || postDeclaredPriorityPresented) && (!finishSelectedAttack || declaredAttackPresented) && (!selectAttacker || attackAssignmentPresented) && (!combatFinish || combatResultPresented) && (!combatPriority || combatPriorityResultPresented)){
@@ -301,13 +301,17 @@ namespace Manaforge.Play
         {
             switch(key){case "casting-pile":return "Fact or Fiction";case "casting-hybrid":return "Slitherhead";case "casting-phyrexian":return "Vault Skirge";case "casting-colorless":return "Matter Reshaper";case "casting-kicker":return "Kavu Titan";case "casting-discount":return "Frogmite";case "casting-changed-target":return "Memnite";case "casting-shared-roots":return "Shared Roots";case "casting-search":case "casting-modes":return "Evolution Charm";case "casting-additional":return "Fling";case "casting-green":case "casting-floating":return "Sedge Scorpion";case "casting-blue":return "Coral Merfolk";case "casting-countered":case "casting-mixed":case "casting-generic":return "Centaur Courser";case "casting-repeat":return "Memnite";case "casting-cancel":return "Garruk's Companion";case "casting-x-zero":case "casting-x":case "casting-ability":return "Walking Ballista";case "haste":return "Raging Goblin";case "flying":return "Scryb Sprites";case "reach":return "Wall of Vines";case "defender":return "Shield Sphere";case "first-strike":return "Porcelain Legionnaire";case "double-strike":return "Fencing Ace";case "deathtouch":return "Sedge Scorpion";case "lifelink":return "Healer's Hawk";case "trample":return "Garruk's Companion";case "menace":return "Goblin Trailblazer";case "vigilance":case "planeswalker":return "Serra Angel";case "indestructible":return "Darksteel Myr";case "battle":return "Memnite";case "draw":return "Divine Intervention";default:throw new ArgumentException("COMBAT_CASE_INVALID");}
         }
+        // YieldStatusView keeps its passive cancel control mounted while hidden.
+        // It is not part of the native decision's submitted choices.
+        private System.Collections.Generic.List<Button> DecisionControls()
+            =>panel.Root.Query<Button>().ToList().Where(button=>button.name!="yield-status-cancel").ToList();
         private IEnumerator HumanBlockingScenario()
         {
             bool ready=false,blocked=false;int casts=0,reselects=0;long firstCaseCast=-1;bool castCancelled=false,caseActivated=false,caseFloated=false;bool caseBlocking=Array.IndexOf(new[]{"reach","defender","indestructible"},combatKeyword)>=0;long submitted=-1;double deadline=Time.realtimeSinceStartupAsDouble+240;
             while(!host.Completion.IsCompleted && Time.realtimeSinceStartupAsDouble<deadline){
                 host.Tick();panel.Tick();long revision=Interlocked.Read(ref snapshotRevision);if(!host.HasPresentedRevision(revision)){yield return null;continue;}
                 if(ArtworkFixtureScene.Argument("-manaforgeLiveScript")=="1" && host.PendingReveal!=null)host.AcknowledgeReveal(host.PendingReveal.Id);
-                var controls=panel.Root.Query<Button>().ToList();bool extendedCostCase=System.Array.IndexOf(new[]{"casting-hybrid","casting-phyrexian","casting-colorless","casting-kicker","casting-discount"},combatKeyword)>=0;
+                var controls=DecisionControls();bool extendedCostCase=System.Array.IndexOf(new[]{"casting-hybrid","casting-phyrexian","casting-colorless","casting-kicker","casting-discount"},combatKeyword)>=0;
                 if(!ready && Volatile.Read(ref snapshots)==1 && controls.Count>0){ready=true;if(!Report("ready")){Fail();yield break;}}
                 if(combatKeyword.Length>0 && Volatile.Read(ref snapshots)>1 && Volatile.Read(ref snapshotReadOnly)==1 && host.PresentedDecision==null && controls.Count==0 && (combatKeyword!="draw" || Volatile.Read(ref nativeOutcome)=="draw")){combatCasePresented=true;if(combatKeyword=="draw"){gamePresented=true;if(!Report("game-ready")){Fail();yield break;}}if(!Report("combat-case-ready")){Fail();yield break;}host.Cancel();host.Tick();panel.Tick();if(!Report("choice",true)){Fail();yield break;}break;}
                 if(combatSpell.Length>0 && Volatile.Read(ref snapshotReadOnly)==1 && host.PresentedDecision==null && controls.Count==0 && (combatSpell=="pump"?Volatile.Read(ref spellBuffSeen)==1:Volatile.Read(ref spellDeathSeen)==1)){combatSpellPresented=true;if(!Report("combat-spell-ready")){Fail();yield break;}host.Cancel();host.Tick();panel.Tick();if(!Report("choice",true)){Fail();yield break;}break;}

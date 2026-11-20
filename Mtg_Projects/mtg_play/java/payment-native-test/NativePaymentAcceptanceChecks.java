@@ -87,6 +87,9 @@ public final class NativePaymentAcceptanceChecks {
         public JsonObject metadata(JsonObject state,String... ids) throws Exception {
             JsonObject request=new JsonObject();JsonArray objects=new JsonArray();for(String id:ids)objects.add(id);request.add("object_ids",objects);request.add("identified_ids",objects.deepCopy());
             JsonObject result=ManaforgeGameMetadata.readPaused(game,payer.getId(),state.get("cycle").getAsInt(),request,()->view);
+            JsonObject prompt=bridge.currentDecision();
+            if(new JsonPrimitive("ok").equals(result.get("status")) && prompt!=null && !new JsonPrimitive(true).equals(prompt.get("is_priority")))
+                check(new JsonPrimitive(false).equals(result.get("priority_open")),"RECOVERY_WRAPPED_CHOICE_IS_NOT_PRIORITY");
             if(staleOnce && ++metadataReads==2 && result.has("ordinary_payment"))result.getAsJsonObject("ordinary_payment").addProperty("cost_fingerprint","different-cost");
             JsonObject trace=new JsonObject();trace.add("state",state.deepCopy());trace.add("prompt",bridge.currentDecision());trace.add("metadata",result.deepCopy());diagnostics.add(trace);
             return result;
