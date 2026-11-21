@@ -603,7 +603,7 @@ public final class ManaforgeBridge implements MageClient {
                 String playerName = playerType.isAI() ? requiredString(command, "player_name") : session.getUserName();
                 boolean accepted = session.joinTable(session.getMainRoomId(),
                     UUID.fromString(requiredString(command, "table_id")), playerName,
-                    playerType, 1, deck(command), "");
+                    playerType, 10, deck(command), "");
                 if (!accepted) throw new IllegalStateException("Join table rejected");
                 message("joined", id, "Joined table");
             } else if (operation.equals("start_game")) {

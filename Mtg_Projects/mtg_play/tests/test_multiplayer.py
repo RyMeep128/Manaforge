@@ -51,6 +51,28 @@ def test_online_seats_readiness_and_start_freeze():
             action()
 
 
+def test_rematch_keeps_seats_decks_and_payment_preferences_but_requires_readiness():
+    lobby = MultiplayerLobby()
+    deck = native_deck(False)
+    lobby.join()
+    lobby.select(0, deck)
+    lobby.select(1, deck)
+    lobby.ready(0, True)
+    lobby.ready(1, True)
+    before = [(seat.kind, seat.deck) for seat in lobby.seats]
+    lobby.start()
+    lobby.return_to_lobby()
+    assert not lobby.started
+    assert [(seat.kind, seat.deck) for seat in lobby.seats] == before
+    assert not any(seat.ready for seat in lobby.seats)
+    assert not lobby.can_start
+    lobby.ready(0, True)
+    lobby.ready(1, True)
+    assert lobby.can_start
+    lobby.start()
+    assert lobby.started
+
+
 def test_ai_assignment_requires_deck_and_leaving_clears_human_seat():
     lobby = MultiplayerLobby()
     deck = native_deck(False)

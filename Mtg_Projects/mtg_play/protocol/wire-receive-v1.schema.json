@@ -1747,6 +1747,37 @@
               "type": "null"
             }
           ]
+        },
+        "priority_hints": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "own_stack",
+                  "self_leaves",
+                  "final_saga",
+                  "untap_resources",
+                  "draw_hazard",
+                  "copy_spell"
+                ]
+              },
+              "maxItems": 16
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "priority_object_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [

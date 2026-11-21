@@ -96,6 +96,10 @@ namespace Manaforge.Play
         public string PaymentReason {get;} public string DecisionError {get;} public string SessionNotice {get;}
         public string Step {get;} public string PriorityPlayerId {get;}
         public IReadOnlyList<string> StackIds {get;}
+        public IReadOnlyList<string> PriorityHints {get;}
+        public string PriorityObjectId {get;}
+        public IReadOnlyDictionary<string,string> StackControllers {get;}
+        public IReadOnlyDictionary<string,string> BattlefieldControllers {get;}
         public IReadOnlyDictionary<string,string> PlayerNames {get;}
         public IReadOnlyDictionary<string,long?> PlayerLifeTotals {get;}
         public IReadOnlyDictionary<string,long?> PlayerLibraryCounts {get;} public IReadOnlyDictionary<string,long?> PlayerHandCounts {get;}
@@ -108,6 +112,10 @@ namespace Manaforge.Play
         public System.Collections.Generic.IReadOnlyList<ProjectedStackTargets> StackTargets {get;}
         internal ProjectedDecisionFrame(JObject source)
         {
+            if(source["priority_hints"] is JArray hints)PriorityHints=Array.AsReadOnly(hints.Select(value=>(string)value).ToArray());
+            PriorityObjectId=(string)source["priority_object_id"];
+            StackControllers=new System.Collections.ObjectModel.ReadOnlyDictionary<string,string>(source["objects"].Where(card=>(string)card["zone"]=="stack").ToDictionary(card=>(string)card["object_id"],card=>(string)card["controller_id"]));
+            BattlefieldControllers=new System.Collections.ObjectModel.ReadOnlyDictionary<string,string>(source["objects"].Where(card=>(string)card["zone"]=="battlefield").ToDictionary(card=>(string)card["object_id"],card=>(string)card["controller_id"]));
             if(source["commanders"] is JArray commanders)Commanders=Array.AsReadOnly(commanders.Select(value=>new ProjectedCommander(value,source)).ToArray());
             PaymentReason=(string)source["payment_reason"];DecisionError=(string)source["decision_error"];SessionNotice=(string)source["session_notice"];
             StackTargets=Array.AsReadOnly((source["stack_targets"] as JArray ?? new JArray()).Select(value=>new ProjectedStackTargets(value)).ToArray());

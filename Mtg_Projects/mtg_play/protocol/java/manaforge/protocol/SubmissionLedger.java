@@ -24,7 +24,7 @@ public final class SubmissionLedger implements AutoCloseable {
     private final String session,viewer;
     private final int capacity;
     private final Map<String,Record> records=new HashMap<>();
-    private Record active;
+    private Record active,concession;
     private boolean closed;
     public SubmissionLedger(String session,String viewer,int capacity) {
         if(session==null || session.isEmpty() || viewer==null || viewer.isEmpty() || capacity<1 || capacity>65536)
@@ -32,7 +32,7 @@ public final class SubmissionLedger implements AutoCloseable {
         this.session=session;this.viewer=viewer;this.capacity=capacity;
     }
     private void open() throws WireEnvelope.EnvelopeException {if(closed)fail("LEDGER_CLOSED");}
-    synchronized boolean hasUnresolved(){return active!=null;}
+    synchronized boolean hasUnresolved(){return active!=null || concession!=null;}
     private static void fail(String code) throws WireEnvelope.EnvelopeException {throw new WireEnvelope.EnvelopeException(code);}
     private JsonObject receipt(Record record) throws IOException {
         JsonObject body=new JsonObject();body.addProperty("session_id",session);body.addProperty("viewer_id",viewer);
@@ -54,11 +54,12 @@ public final class SubmissionLedger implements AutoCloseable {
             return new Prepared(false,receipt(existing));
         }
         if(records.size()>=capacity)fail("COMMAND_HISTORY_FULL");
-        String rejection=admissionRejection!=null?admissionRejection:active==null?null:"COMMAND_PENDING";
+        boolean conceding="concede".equals(body.get("operation").getAsString());
+        String rejection=admissionRejection!=null?admissionRejection:concession!=null || !conceding && active!=null?"COMMAND_PENDING":null;
         Record record=new Record(request,rejection==null?"submitted":"rejected",rejection);
         JsonObject acknowledgement=receipt(record); // reject invalid admission codes before reserving
         records.put(id,record);
-        if(rejection==null)active=record;
+        if(rejection==null){if(conceding)concession=record;else active=record;}
         return new Prepared(rejection==null,acknowledgement);
     }
     /** Trusted engine-correlated outcome only; never call because a write or game result looked successful. */
@@ -71,15 +72,15 @@ public final class SubmissionLedger implements AutoCloseable {
         }
         if(record.outcome.equals("uncertain") && outcome.equals("submitted"))return receipt(record);
         record.outcome=outcome;record.code=code;
-        if(outcome.equals("confirmed") || outcome.equals("rejected")) {if(active==record)active=null;}
+        if(outcome.equals("confirmed") || outcome.equals("rejected")) {if(active==record)active=null;if(concession==record)concession=null;}
         return acknowledgement;
     }
     public synchronized void disconnected() throws IOException {
-        open();if(active!=null) {active.outcome="uncertain";active.code="COMMAND_UNCERTAIN";}
+        open();for(Record pending:new Record[]{active,concession})if(pending!=null){pending.outcome="uncertain";pending.code="COMMAND_UNCERTAIN";}
     }
     /** Owner-only observation; does not reserve or replay an engine submission. */
     public synchronized JsonObject receiptFor(String id) throws IOException {
         open();Record record=records.get(id);if(record==null)fail("ACK_UNKNOWN");return receipt(record);
     }
-    public synchronized void close() {closed=true;active=null;records.clear();}
+    public synchronized void close() {closed=true;active=concession=null;records.clear();}
 }

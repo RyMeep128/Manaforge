@@ -16,7 +16,11 @@ namespace Manaforge.Play
             if(ArtworkFixtureScene.Argument("-manaforgeRequireAutoPayment")=="1" && frame.Actions.Any(action=>action.Kind=="pay_mana")){
                 UnityEngine.Debug.LogError("AUTO_PAYMENT_MANUAL_INPUT_REQUIRED");UnityEngine.Application.Quit(1);return false;
             }
-            if(frame.Result!=null || frame.Decision==null && frame.Actions.Count==0)return true;var offer=host.PresentedDecision;if(offer?.CanSubmit!=true || submitted==frame.Context.Revision)return false;
+            if(frame.Result!=null)return true;
+            // Read-only updates keep the other seat's board current while it waits.
+            // Absence of a decision is not evidence that the match has finished.
+            if(frame.Decision==null && frame.Actions.Count==0)return false;
+            var offer=host.PresentedDecision;if(offer?.CanSubmit!=true || submitted==frame.Context.Revision)return false;
             // Acceptance must use the same persistent handle as a player before interacting.
             for(var ancestor=panel.Root.parent;ancestor!=null;ancestor=ancestor.parent)if(ancestor is GameplayDrawer drawer && !drawer.IsOpen){
                 using(var expand=NavigationSubmitEvent.GetPooled()){expand.target=drawer.Tab;drawer.Tab.SendEvent(expand);}return false;

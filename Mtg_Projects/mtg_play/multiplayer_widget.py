@@ -50,6 +50,7 @@ class MultiplayerPanel(W.QWidget):
         self.claim_ticket = None
         self.waiting_peers = set()
         self.reconnect_pending = False
+        self.returning_to_lobby = False
         self.jobs = JobQueue(self)
         self.jobs.progress.connect(self._progress)
         self.jobs.status.connect(self._status)
@@ -241,7 +242,7 @@ class MultiplayerPanel(W.QWidget):
                     "version": APP_VERSION,
                     "adapter": ADAPTER_VERSION,
                     "lobby": self.view,
-                }
+                }, self.guest_peer
             )
         self.render()
 
@@ -273,7 +274,7 @@ class MultiplayerPanel(W.QWidget):
                     self.send_match(message["peer"])
                     return
                 if self.model.seats[1].kind != "open":
-                    self.relay.send({"op": "kick"})
+                    self.relay.send({"op": "kick", "peer": message["peer"]})
                 else:
                     self.model.join()
                     self.send_lobby()
@@ -431,6 +432,10 @@ class MultiplayerPanel(W.QWidget):
                     )
                     if first and self.selectors[1].currentData() is not None:
                         self.select_deck(1)
+                elif kind == "return_to_lobby" and not self.hosting:
+                    self.return_to_lobby(payload.get("message", "Game ended. Ready up for another game."), notify=False)
+                elif kind == "game_interrupted" and self.hosting and self.started:
+                    self.return_to_lobby("Game interrupted. The lobby and decks have been kept.")
                 elif kind == "prepare" and not self.hosting and not self.busy:
                     self.start_guest(payload)
                 elif kind == "recovery_ended" and not self.hosting:
@@ -546,6 +551,9 @@ class MultiplayerPanel(W.QWidget):
         from mtg_proxy.constants import APP_VERSION
 
         self.model.start()
+        self.returning_to_lobby = False
+        self.remote_finished = threading.Event()
+        self.recovery_mailbox = RecoveryMailbox()
         self.started = True
         self.view = self.model.public()
         self.relay.send({"op": "start"})
@@ -604,6 +612,7 @@ class MultiplayerPanel(W.QWidget):
     def start_guest(self, payload):
         self.started = True
         self.finished = self.reconnect_pending = False
+        self.returning_to_lobby = False
         self.failure_code = None
         if self.tunnel:
             self.tunnel.close()
@@ -768,6 +777,8 @@ class MultiplayerPanel(W.QWidget):
         self.workspace.unity_payment_mode.setEnabled(not self.busy and not self.started)
 
     def _progress(self, job, value):
+        if self.returning_to_lobby:
+            return
         if (
             self.started
             and self.hosting
@@ -799,21 +810,31 @@ class MultiplayerPanel(W.QWidget):
 
     def _status(self, job, state, value):
         if state in ("completed", "failed", "cancelled"):
+            if self.returning_to_lobby:
+                self.render()
+                return
             self.finished = True
             if self.failure_code is not None:
                 return
             outcome = value.get("outcome") if isinstance(value, dict) else None
+            if not self.started:
+                if outcome in ("win", "loss", "draw"):
+                    self.normal_result = True
+                    self.message.setText("Game result: " + outcome)
+                    self.render()
+                return
             if (self.recovery_state or {}).get("ended"):
                 self.normal_result = True
-                self.message.setText(
-                    "The host ended the game without a winner. Leave to set up another game."
-                )
-                self.render()
+                self.return_to_lobby("The host ended the game without a winner. Ready up for another game.")
                 return
             self.normal_result = outcome in ("win", "loss", "draw")
             if not self.normal_result:
                 if not self.hosting and self.started:
-                    self.connection_lost()
+                    if self.relay and not self.relay.closed:
+                        self.relay.payload({"type": "game_interrupted"})
+                        self.return_to_lobby("Game interrupted. Waiting for the host to reset the lobby.", notify=False)
+                    else:
+                        self.connection_lost()
                     return
                 self.fail("GAME_INTERRUPTED")
                 return
@@ -828,12 +849,11 @@ class MultiplayerPanel(W.QWidget):
                 self.relay.payload(
                     {"type": "finished"}, self.guest_peer if self.hosting else None
                 )
-            self.message.setText(
-                "Game result: " + outcome
-                if outcome in ("win", "loss", "draw")
-                else "Game interrupted or closed. Leave the lobby to set up another game."
-            )
-            self.render()
+            if self.hosting:
+                self.return_to_lobby("Game result: " + outcome + ". Ready up for another game.")
+            else:
+                self.message.setText("Game result: " + outcome + ". Waiting for the host's lobby.")
+                self.render()
 
     @C.pyqtSlot(str)
     def on_tunnel_failed(self, code):
@@ -862,6 +882,11 @@ class MultiplayerPanel(W.QWidget):
     @C.pyqtSlot(str)
     def fail(self, code):
         if self.normal_result or self.failure_code is not None:
+            return
+        if self.started and self.relay and not self.relay.closed:
+            if not self.hosting:
+                self.relay.payload({"type": "game_interrupted"})
+            self.return_to_lobby("Game interrupted: " + code.replace("_", " ").lower() + ". The lobby and decks have been kept.", notify=self.hosting)
             return
         if not self.hosting and self.started:
             self.connection_lost()
@@ -893,7 +918,36 @@ class MultiplayerPanel(W.QWidget):
         )
         self.render()
 
+    def return_to_lobby(self, message, *, notify=True):
+        self.returning_to_lobby = True
+        self.started = self.finished = self.normal_result = False
+        self.failure_code = None
+        self.jobs.cancel_all()
+        if self.tunnel:
+            self.tunnel.close()
+            self.tunnel = None
+        self.target_port = None
+        self.recovery_state = None
+        self.claim_peer = self.claim_ticket = None
+        self.reconnect_pending = False
+        if self.hosting and self.model:
+            self.model.return_to_lobby()
+            self.view = self.model.public()
+            if self.relay and not self.relay.closed:
+                if notify:
+                    self.relay.payload({"type": "return_to_lobby", "message": message}, self.guest_peer)
+                self.send_lobby()
+        elif self.view:
+            self.view = deepcopy(self.view)
+            self.view["started"] = False
+            for seat in self.view["seats"]:
+                if seat["kind"] == "human":
+                    seat["ready"] = False
+        self.message.setText(message)
+        self.render()
+
     def reset(self):
+        self.returning_to_lobby = True
         self.jobs.cancel_all()
         if self.tunnel:
             self.tunnel.close()
@@ -913,6 +967,7 @@ class MultiplayerPanel(W.QWidget):
         self.guest_peer = "guest"
         self.waiting_peers.clear()
         self.reconnect_pending = False
+        self.returning_to_lobby = False
         self.message.setText("Host a game or enter a friend's invitation.")
         self.render()
 

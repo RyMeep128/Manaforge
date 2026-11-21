@@ -34,7 +34,7 @@ namespace Manaforge.Play.Protocol
         private readonly string session, viewer;
         private readonly int capacity;
         private readonly Dictionary<string, Record> records = new Dictionary<string, Record>(StringComparer.Ordinal);
-        private Record active;
+        private Record active,concession;
         private bool connected = true, faulted, disposed;
         public CommandTracker(string session, string viewer, int capacity = 4096)
         {
@@ -42,7 +42,8 @@ namespace Manaforge.Play.Protocol
                 throw new ArgumentException("TRACKER_CONTEXT_INVALID");
             this.session = session; this.viewer = viewer; this.capacity = capacity;
         }
-        public bool CanSubmit { get { lock (gate) return !disposed && connected && !faulted && active == null && records.Count < capacity; } }
+        public bool CanSubmit { get { lock (gate) return !disposed && connected && !faulted && active == null && concession == null && records.Count < capacity; } }
+        public bool CanConcede { get { lock (gate) return !disposed && connected && !faulted && concession == null && records.Count < capacity; } }
         private void Open()
         { if (disposed) throw new WireEnvelope.EnvelopeException("TRACKER_CLOSED"); }
         private static void Uncertain(Record record)
@@ -52,7 +53,7 @@ namespace Manaforge.Play.Protocol
         }
         private void InvalidAck(string code)
         {
-            faulted = true; connected = false; Uncertain(active);
+            faulted = true; connected = false; Uncertain(active);Uncertain(concession);
             throw new WireEnvelope.EnvelopeException(code);
         }
         // Call BEFORE the first write. If the write may have failed partially, Disconnect.
@@ -63,17 +64,19 @@ namespace Manaforge.Play.Protocol
                 Open();
                 if (faulted) throw new WireEnvelope.EnvelopeException("TRACKER_FAULTED");
                 if (!connected) throw new WireEnvelope.EnvelopeException("TRACKER_DISCONNECTED");
-                if (active != null) throw new WireEnvelope.EnvelopeException(active.State == CommandState.Uncertain ? "COMMAND_UNCERTAIN" : "COMMAND_PENDING");
                 var envelope = WireMessages.Parse(commandText);
                 var body = (JObject)envelope["body"];
+                bool conceding=(string)body["operation"]=="concede";
+                if(concession!=null || !conceding && active!=null)throw new WireEnvelope.EnvelopeException(active?.State==CommandState.Uncertain?"COMMAND_UNCERTAIN":"COMMAND_PENDING");
                 if ((string)envelope["message_type"] != "command" || (string)body["session_id"] != session || (string)body["viewer_id"] != viewer)
                     throw new WireEnvelope.EnvelopeException("COMMAND_CONTEXT");
                 string id = (string)envelope["message_id"];
                 if (records.ContainsKey(id)) throw new WireEnvelope.EnvelopeException("COMMAND_ID_REUSED");
                 if (records.Count >= capacity) throw new WireEnvelope.EnvelopeException("COMMAND_HISTORY_FULL");
-                active = new Record { Id = id, Revision = (long)body["revision"], State = CommandState.AwaitingAck,DecisionId=(string)body["decision_id"] };
-                records.Add(id, active);
-                return active.Snapshot();
+                var record = new Record { Id = id, Revision = (long)body["revision"], State = CommandState.AwaitingAck,DecisionId=(string)body["decision_id"] };
+                if(conceding)concession=record;else active=record;
+                records.Add(id, record);
+                return record.Snapshot();
             }
         }
         public TrackedCommand Accept(string acknowledgementText)
@@ -101,7 +104,7 @@ namespace Manaforge.Play.Protocol
                 }
                 if (record.State == CommandState.Uncertain && state == CommandState.Submitted) return record.Snapshot();
                 record.State = state; record.Code = code;
-                if (state == CommandState.Confirmed || state == CommandState.Rejected) active = null;
+                if (state == CommandState.Confirmed || state == CommandState.Rejected){if(ReferenceEquals(active,record))active=null;if(ReferenceEquals(concession,record))concession=null;}
                 return record.Snapshot();
             }
         }
@@ -111,16 +114,16 @@ namespace Manaforge.Play.Protocol
         {
             lock (gate)
             {
-                Open(); faulted = true; connected = false; Uncertain(active);
+                Open(); faulted = true; connected = false; Uncertain(active);Uncertain(concession);
                 return SessionErrors.Parse(text, session, viewer);
             }
         }
         // Read-only observation of this authenticated tracker's own immutable receipt history.
         public TrackedCommand Find(string commandId)
         {lock(gate)return !disposed && commandId!=null && records.TryGetValue(commandId,out var record)?record.Snapshot():null;}
-        public TrackedCommand Current { get { lock (gate) return active?.Snapshot(); } }
+        public TrackedCommand Current { get { lock (gate) return (concession??active)?.Snapshot(); } }
         public void Disconnect()
-        { lock (gate) { Open(); connected = false; Uncertain(active); } }
+        { lock (gate) { Open(); connected = false; Uncertain(active);Uncertain(concession); } }
         // A freshly authenticated connection does not resolve a previous command's uncertainty.
         public void AuthenticatedReconnect()
         {
@@ -131,6 +134,6 @@ namespace Manaforge.Play.Protocol
             }
         }
         public void Dispose()
-        { lock (gate) { disposed = true; connected = false; active = null; records.Clear(); } }
+        { lock (gate) { disposed = true; connected = false; active = concession = null; records.Clear(); } }
     }
 }

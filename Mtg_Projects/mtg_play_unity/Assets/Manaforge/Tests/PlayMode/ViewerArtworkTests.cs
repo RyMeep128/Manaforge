@@ -30,6 +30,15 @@ namespace Manaforge.Play.Tests
             surface=new ViewerCardSurface(document.rootVisualElement);yield return null;
         }
         [UnityTearDown] public IEnumerator Cleanup(){surface.Dispose();UnityEngine.Object.Destroy(host);UnityEngine.Object.Destroy(settings);yield return null;}
+        [UnityTest] public IEnumerator AbilityArtworkRequestsItsSourcePrintingRatherThanItsAbilityLabel()
+        {
+            var ticket=surface.BeginViewer("fixture-0001","one",new ViewerArtworkScope());yield return null;yield return null;
+            Assert.That(surface.TryPresent(ticket,ViewerCardSurfaceTests.Frame(artwork:true,name:"Activate: create a copy",typeLine:"Ability",transformed:true)),Is.True);
+            var request=surface.RequestArtwork(ticket,"fixture-0002");Assert.That(request,Is.Not.Null);
+            Assert.That(request.FaceName,Is.Null);Assert.That(request.Transformed,Is.False);
+            Assert.That(surface.TryApplyArtwork(ticket,Prepare(request)),Is.True);
+            Assert.That(surface.CardsRoot.Q<CardView>().Artwork,Is.Not.Null);
+        }
         [UnityTest] public IEnumerator ExactPrintingArtworkIsSharedWithInspectionAndSurvivesCurrentNameChanges()
         {
             var scope=new ViewerArtworkScope();var ticket=surface.BeginViewer("fixture-0001","one",scope);yield return null;yield return null;yield return null;

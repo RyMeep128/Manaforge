@@ -115,7 +115,7 @@ namespace Manaforge.Play
             bool enabled=!ended && !submitting && canConcede();concede.SetEnabled(enabled);confirmConcede.SetEnabled(enabled);
             if(IsOpen)shade.BringToFront();
         }
-        public void EndMatch(){ended=true;Close();}
+        public void EndMatch(){if(ended)return;ended=true;Close();Tick();}
         public void Dispose()
         {
             if(disposed)return;Close();disposed=true;ticker.Pause();pending?.ContinueWith(task=>{_=task.Exception;},TaskScheduler.Default);

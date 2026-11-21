@@ -272,6 +272,13 @@ class GameSnapshot(Serializable):
     stack_targets: tuple[StackTargets, ...] | None = None
     decision_error: str | None = None
     session_notice: str | None = None
+    priority_hints: tuple[
+        Literal[
+            "own_stack", "self_leaves", "final_saga",
+            "untap_resources", "draw_hazard", "copy_spell",
+        ], ...
+    ] | None = None
+    priority_object_id: str | None = None
 
 
 @dataclass(frozen=True)

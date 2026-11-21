@@ -27,7 +27,7 @@ namespace Manaforge.Play
         internal bool UnifiedPriorityActions=>priorityActions!=null;
         internal bool PriorityCommandPending=>pending!=null;
         internal bool PrioritySessionActive=>!disposed && host.Authenticated && !host.Completion.IsCompleted;
-        internal bool CanPassPriority=>PrioritySessionActive && !LayoutEditing && pending==null && offer!=null && ReferenceEquals(offer,host.PresentedDecision) && offer.CanSubmit && offer.Frame.Decision?.IsPriority==true && offer.Frame.Decision.Family=="selection" && offer.Frame.Decision.Groups.Count==0 && offer.Frame.Decision.PlayerId==offer.Frame.Context.ViewerId && offer.Frame.PriorityPlayerId==offer.Frame.Context.ViewerId && offer.Frame.Status=="active" && offer.Frame.Result==null && offer.Frame.Actions.Count(action=>action.Kind=="pass" && action.ObjectId==null)==1;
+        internal bool CanPassPriority {get{var frame=offer?.Frame;return PrioritySessionActive && !LayoutEditing && pending==null && frame?.Decision?.IsPriority==true && ReferenceEquals(offer,host.PresentedDecision) && offer.CanSubmit && frame.Decision.Family=="selection" && frame.Decision.Groups.Count==0 && frame.Decision.PlayerId==frame.Context.ViewerId && frame.PriorityPlayerId==frame.Context.ViewerId && frame.Status=="active" && frame.Result==null && frame.Actions.Count(action=>action.Kind=="pass" && action.ObjectId==null)==1;}}
         private float continuityUntil;private YieldPresentation displayPresentation;
         private bool built,soleAbilityAttempted;private string selectedGroup;
         private readonly System.Collections.Generic.List<CardView> groupPreviews=new System.Collections.Generic.List<CardView>();
@@ -38,7 +38,8 @@ namespace Manaforge.Play
         internal void SetChoiceArtworkState(Func<int> state){choiceArtworkState=state;}
         internal void InvalidateAmountArtwork(){foreach(var preview in amountPreviews)preview.Dispose();amountPreviews.Clear();amountArtworkState=-1;}
         private void RefreshAmountArtwork(){
-            if(amountArtwork.Count==0 || !ReferenceEquals(offer,host.PresentedDecision) || !host.HasPresentedRevision(offer.Frame.Context.Revision))return;
+            var frame=offer?.Frame;
+            if(amountArtwork.Count==0 || frame==null || !ReferenceEquals(offer,host.PresentedDecision) || !host.HasPresentedRevision(frame.Context.Revision))return;
             int state=choiceArtworkState?.Invoke()??0;if(state==amountArtworkState)return;
             InvalidateAmountArtwork();amountArtworkState=state;
             foreach(var item in amountArtwork){
@@ -80,7 +81,7 @@ namespace Manaforge.Play
             Root.style.backgroundColor=new Color(.07f,.10f,.13f);Root.style.paddingLeft=16;Root.style.paddingRight=16;Root.style.paddingTop=12;Root.style.paddingBottom=12;
             prompt.style.fontSize=20;prompt.style.color=Color.white;prompt.style.marginBottom=8;prompt.style.whiteSpace=WhiteSpace.Normal;
             status.style.minHeight=18;status.style.fontSize=14;status.style.color=new Color(.8f,.85f,.9f);status.style.marginBottom=8;status.style.whiteSpace=WhiteSpace.Normal;pages.style.flexDirection=FlexDirection.Row;
-            decisionBody.Add(prompt);decisionBody.Add(manaPool);decisionBody.Add(status);decisionBody.Add(controls);decisionBody.Add(pages);Root.Add(decisionBody);yieldStatus=new YieldStatusView(Root,()=>{Priority.CancelYield();PrioritySettingsChanged();});parent.Add(Root);Root.style.display=DisplayStyle.None;
+            decisionBody.Add(prompt);decisionBody.Add(manaPool);decisionBody.Add(status);decisionBody.Add(controls);decisionBody.Add(pages);Root.Add(decisionBody);yieldStatus=new YieldStatusView(Root,()=>{Priority.CancelPassing(PriorityFrame);PrioritySettingsChanged();});parent.Add(Root);Root.style.display=DisplayStyle.None;
         }
         internal void UseUnifiedPriorityActions(Action openSettings)
         {
@@ -89,21 +90,21 @@ namespace Manaforge.Play
         internal bool TryPassPriority()
         {
             ThreadOnly();if(!CanPassPriority || Priority.Current.Paused || YieldPresentation.Resolve(Priority.Current,offer?.Frame,PriorityControlsOpen,host.Completion.IsCompleted).Compact)return false;
-            var captured=offer;var pass=captured.Frame.Actions.Single(action=>action.Kind=="pass" && action.ObjectId==null);
+            var captured=offer;var frame=captured?.Frame;if(frame==null)return false;var pass=frame.Actions.Single(action=>action.Kind=="pass" && action.ObjectId==null);
             bool sent=Send(captured,()=>host.PerformAsync(captured,pass));priorityActions?.Refresh();return sent;
         }
         internal bool TryBeginPriorityYield(string mode)
         {
             ThreadOnly();if(!CanPassPriority || Priority.Current.Paused || PriorityControlsOpen)return false;
-            Priority.BeginYield(mode,offer.Frame);PrioritySettingsChanged();return Priority.Current.Yield==mode;
+            var frame=offer?.Frame;if(frame==null)return false;Priority.BeginYield(mode,frame);PrioritySettingsChanged();return Priority.Current.Yield==mode;
         }
-        internal void CancelPriorityYield(){ThreadOnly();if(!PrioritySessionActive || LayoutEditing)return;Priority.CancelYield();PrioritySettingsChanged();}
+        internal void CancelPriorityYield(){ThreadOnly();if(!PrioritySessionActive || LayoutEditing)return;Priority.CancelPassing(PriorityFrame);PrioritySettingsChanged();}
         internal void ResumePriority(){ThreadOnly();if(!PrioritySessionActive || LayoutEditing)return;Priority.Resume();PrioritySettingsChanged();}
         internal System.Collections.Generic.IEnumerable<VisualElement> PriorityAlternatives()
         {
-            var captured=offer;if(captured?.Frame.Decision?.IsPriority!=true)yield break;
-            for(int index=0;index<captured.Frame.Actions.Count;index++){var action=captured.Frame.Actions[index];if(action.Kind!="pass" || action.ObjectId!=null)yield return Button("decision-action-"+index,action.Label,()=>Send(captured,()=>host.PerformAsync(captured,action)));}
-            for(int index=0;index<captured.Frame.Decision.Options.Count;index++){var option=captured.Frame.Decision.Options[index];yield return Button("decision-option-"+index,option.Label,()=>Send(captured,()=>host.ChooseAsync(captured,option)));}
+            var captured=offer;var frame=captured?.Frame;if(frame?.Decision?.IsPriority!=true)yield break;
+            for(int index=0;index<frame.Actions.Count;index++){var action=frame.Actions[index];if(action.Kind!="pass" || action.ObjectId!=null)yield return Button("decision-action-"+index,action.Label,()=>Send(captured,()=>host.PerformAsync(captured,action)));}
+            for(int index=0;index<frame.Decision.Options.Count;index++){var option=frame.Decision.Options[index];yield return Button("decision-option-"+index,option.Label,()=>Send(captured,()=>host.ChooseAsync(captured,option)));}
         }
         private void ThreadOnly(){if(Thread.CurrentThread.ManagedThreadId!=thread)throw new InvalidOperationException("VIEWER_DECISION_THREAD");}
         private void Clear(bool preserveStatus=false)
@@ -119,7 +120,7 @@ namespace Manaforge.Play
             for(int i=priorityTasks.Count-1;i>=0;i--){
                 var task=priorityTasks[i];if(!task.IsCompleted)continue;
                 if(task.Status==TaskStatus.RanToCompletion && task.Result!=null)priorityReceipts.Add(task.Result);
-                else{_=task.Exception;Priority.Failed();}
+                else{_=task.Exception;if(!RetiredBeforeSubmission(task))Priority.Failed();}
                 priorityTasks.RemoveAt(i);
             }
             for(int i=priorityReceipts.Count-1;i>=0;i--){
@@ -129,23 +130,37 @@ namespace Manaforge.Play
                 priorityReceipts.RemoveAt(i);
             }
         }
+        private static bool RetiredBeforeSubmission(Task task)
+        {
+            var error=task.Exception?.GetBaseException() as WireEnvelope.EnvelopeException;
+            // These failures occur during admission, before any command is written.
+            // Never retry the retired offer; a fresh native offer may progress.
+            return error?.Code=="STALE_DECISION" || error?.Code=="STALE_REVISION" || error?.Code=="SESSION_NO_DECISION";
+        }
         public void Tick()
         {
             ThreadOnly();if(disposed)return;if(priorityEnabled)MonitorPriorityCommands();var current=host.PresentedDecision;
+            // Network reception can revoke an offer between any two Frame reads.
+            // Render one immutable snapshot; dispatch still validates the live offer.
+            var frame=current?.Frame;if(frame?.Decision==null){current=null;frame=null;}
             if(!ReferenceEquals(current,offer)){
+                var retiredCommand=submitted??(pending?.Status==TaskStatus.RanToCompletion?pending.Result:null);
+                var retiredReceipt=retiredCommand==null?null:host.CommandOutcome(retiredCommand);
+                bool openingMulligan=prompt.text.StartsWith("Mulligan",StringComparison.OrdinalIgnoreCase);
                 Clear(preserveStatus:host.Authenticated && !host.Completion.IsCompleted);offer=current;
-                if(offer?.Frame?.Decision!=null){var decision=offer.Frame.Decision;Debug.Log("Manaforge decision: family="+decision.Family+" priority="+decision.IsPriority+" options="+decision.Options.Count+" actions="+offer.Frame.Actions.Count+" finish="+decision.CanFinish+" stack="+offer.Frame.StackIds.Count);}
+                if(current==null && retiredReceipt?.State==CommandState.Confirmed){status.text=FeedbackText(CommandState.Confirmed,openingMulligan);Root.AddToClassList("command-confirmed");}
+                if(frame!=null){var decision=frame.Decision;Debug.Log("Manaforge decision: family="+decision.Family+" priority="+decision.IsPriority+" options="+decision.Options.Count+" actions="+frame.Actions.Count+" finish="+decision.CanFinish+" stack="+frame.StackIds.Count);}
             }
             if(host.Completion.IsCompleted){Priority.Suspend();autoAfter=-1;}
-            Priority.Observe(offer?.Frame);
-            Presentation=YieldPresentation.Resolve(Priority.Current,offer?.Frame,PriorityControlsOpen,host.Completion.IsCompleted);
+            Priority.Observe(frame);
+            Presentation=YieldPresentation.Resolve(Priority.Current,frame,PriorityControlsOpen,host.Completion.IsCompleted);
             bool bridge=offer==null && !host.Completion.IsCompleted && Time.unscaledTime<continuityUntil;
             if(!bridge || displayPresentation==null)displayPresentation=Presentation;
-            bool unified=priorityActions!=null && PrioritySessionActive && (offer?.Frame.Decision?.IsPriority==true && offer.Frame.Decision.Family=="selection" && offer.Frame.Decision.Groups.Count==0 || offer==null && (priorityActions.HasPresented || Priority.Current.Yield!=null));
+            bool unified=priorityActions!=null && PrioritySessionActive && (frame?.Decision?.IsPriority==true && frame.Decision.Family=="selection" && frame.Decision.Groups.Count==0 || offer==null && (priorityActions.HasPresented || Priority.Current.Yield!=null));
             yieldStatus.Bind(displayPresentation);if(priorityActions!=null)yieldStatus.Root.style.display=DisplayStyle.None;
             Root.EnableInClassList("unified-priority",unified);
             if(unified){Root.style.minHeight=StyleKeyword.Null;priorityActions.Refresh();}
-            else if(!Presentation.Compact && offer!=null && !built)Build();
+            else if(!Presentation.Compact && offer!=null && !built)Build(frame);
             RefreshAmountArtwork();
             if(priorityActions!=null){priorityActions.Root.style.display=unified?DisplayStyle.Flex:DisplayStyle.None;if(!PrioritySessionActive)priorityActions.Reset();}
             decisionBody.style.display=unified || displayPresentation.Compact?DisplayStyle.None:DisplayStyle.Flex;
@@ -155,13 +170,13 @@ namespace Manaforge.Play
             manaInput.Refresh(offer);if(offer==null){controls.SetEnabled(false);return;}
             if(pending!=null && pending.IsCompleted){
                 if(pending.Status==TaskStatus.RanToCompletion)submitted=pending.Result;
-                else Priority.Failed();
+                else if(!RetiredBeforeSubmission(pending))Priority.Failed();
                 var error=pending.Exception?.GetBaseException() as WireEnvelope.EnvelopeException;
                 status.text=error?.Code=="AMOUNT_OUT_OF_RANGE"?"Enter values within the displayed limits.":error?.Code=="SESSION_NUMERIC_UNAVAILABLE"?"Numeric limits are unavailable. Wait for the game to update.":pending.IsCanceled || pending.IsFaulted?"Command was not confirmed. Check the current decision.":"Choice sent. Waiting for the game.";pending=null;
             }
             var feedback=host.CommandFeedback(offer,submitted);
             if(feedback!=null){
-                status.text=FeedbackText(feedback.State,(offer.Frame.Decision?.Prompt??"").StartsWith("Mulligan",StringComparison.OrdinalIgnoreCase));
+                status.text=FeedbackText(feedback.State,(frame?.Decision?.Prompt??"").StartsWith("Mulligan",StringComparison.OrdinalIgnoreCase));
                 if(feedback.State==CommandState.Rejected || feedback.State==CommandState.Uncertain)Priority.Failed();
             }
             Root.EnableInClassList("command-pending",pending!=null || feedback?.State==CommandState.Submitted);
@@ -171,17 +186,12 @@ namespace Manaforge.Play
             numericSubmit?.SetEnabled(TryNumbers(out _,false));
             controls.Q<Button>("decision-pass-turn")?.SetEnabled(offer.CanSubmit && pending==null && !Priority.Current.Paused);
             if(!offer.CanSubmit && pending==null && string.IsNullOrEmpty(status.text))status.text="Waiting for the game.";
-            if(!soleAbilityAttempted && pending==null && offer.CanSubmit && offer.Frame.Decision?.AbilitySelection==true
-                && offer.Frame.Decision.Family=="selection" && !offer.Frame.Decision.IsPriority && offer.Frame.Decision.RequestId==null
-                && !offer.Frame.Decision.CanFinish && offer.Frame.Decision.Options.Count==1 && offer.Frame.Actions.Count==0){
-                soleAbilityAttempted=true;var captured=offer;var only=captured.Frame.Decision.Options[0];Send(captured,()=>host.ChooseAsync(captured,only));return;
-            }
-            var automatic=priorityEnabled?Priority.Evaluate(offer.Frame):null;
+            var automatic=priorityEnabled?Priority.Evaluate(frame):null;
             if(automatic==null || pending!=null || !offer.CanSubmit || PriorityControlsOpen || LayoutEditing || PresentationHold?.Invoke()==true){autoAfter=-1;return;}
-            if(autoAfter<0){autoAfter=Time.unscaledTime+.35f;return;}
+            if(autoAfter<0)autoAfter=Time.unscaledTime;
             if(Time.unscaledTime>=autoAfter){
                 var captured=offer;autoAfter=-1;
-                if(ReferenceEquals(host.PresentedDecision,captured) && Priority.Claim(captured.Frame))
+                if(ReferenceEquals(host.PresentedDecision,captured) && Priority.Claim(frame))
                     Send(captured,()=>host.PerformAsync(captured,automatic),true);
             }
         }
@@ -200,7 +210,7 @@ namespace Manaforge.Play
         }
         public bool TryActivateObject(ViewerDecisionOffer captured,string objectId)
         {
-            if(ObjectChoiceCount(captured,objectId)!=1)return false;var frame=captured.Frame;
+            if(ObjectChoiceCount(captured,objectId)!=1)return false;var frame=captured.Frame;if(frame?.Decision==null)return false;
             foreach(var action in frame.Actions)if(action.ObjectId==objectId)return Send(captured,()=>host.PerformAsync(captured,action));
             foreach(var option in frame.Decision.Options)if(option.ObjectId==objectId)return Send(captured,()=>host.ChooseAsync(captured,option));
             return false;
@@ -214,7 +224,7 @@ namespace Manaforge.Play
         }
         public VisualElement ObjectChoices(ViewerDecisionOffer captured,string objectId)
         {
-            ThreadOnly();var result=new VisualElement();if(ObjectChoiceCount(captured,objectId)==0)return result;var frame=captured.Frame;
+            ThreadOnly();var result=new VisualElement();if(ObjectChoiceCount(captured,objectId)==0)return result;var frame=captured.Frame;if(frame?.Decision==null)return result;
             foreach(var action in frame.Actions)if(action.ObjectId==objectId)result.Add(Button("board-action",action.Label,()=>Send(captured,()=>host.PerformAsync(captured,action))));
             foreach(var option in frame.Decision.Options)if(option.ObjectId==objectId)result.Add(Button("board-option",option.Label,()=>Send(captured,()=>host.ChooseAsync(captured,option))));
             return result;
@@ -226,13 +236,13 @@ namespace Manaforge.Play
         private void AddTurnPass(ViewerDecisionOffer captured,ProjectedAction action)
         {
             var frame=captured.Frame;
-            if(!priorityEnabled || action.Kind!="pass" || action.ObjectId!=null || frame.Decision?.IsPriority!=true
+            if(!priorityEnabled || action.Kind!="pass" || action.ObjectId!=null || frame?.Decision?.IsPriority!=true
                 || frame.Decision.PlayerId!=frame.Context.ViewerId || frame.PriorityPlayerId!=frame.Context.ViewerId
                 || !frame.Turn.HasValue || frame.ActivePlayerId==null || frame.Status!="active" || frame.Result!=null)return;
             bool ownTurn=frame.ActivePlayerId==frame.Context.ViewerId;
-            var button=Button("decision-pass-turn",ownTurn?"End turn":"Pass to my turn",()=>{
+            var button=Button("decision-pass-turn",ownTurn?"End turn":"Pass until response",()=>{
                 if(!ReferenceEquals(offer,captured) || !ReferenceEquals(host.PresentedDecision,captured) || !captured.CanSubmit || pending!=null || Priority.Current.Paused)return;
-                Priority.BeginYield(ownTurn?"end-turn":"turn",frame);PrioritySettingsChanged();
+                Priority.BeginYield("response",frame);PrioritySettingsChanged();
             });
             button.SetEnabled(captured.CanSubmit && !Priority.Current.Paused);controls.Add(button);
         }
@@ -254,15 +264,15 @@ namespace Manaforge.Play
         }
         private static Button Button(string name,string text,Action click)
         {var button=new Button(click){name=name,text=text??"Unlabelled engine option"};foreach(var label in button.Query<TextElement>().ToList())label.enableRichText=false;button.enableRichText=false;button.style.fontSize=16;button.style.color=Color.white;button.style.backgroundColor=new Color(.18f,.24f,.30f);button.style.paddingTop=8;button.style.paddingBottom=8;button.style.marginBottom=4;return button;}
-        private void Build()
+        private void Build(ProjectedDecisionFrame snapshot=null)
         {
-            var captured=offer;var frame=captured?.Frame;if(frame==null){Clear();return;}built=true;Root.style.minHeight=StyleKeyword.Null;status.text="";ClearGroupPreviews();
+            var captured=offer;var frame=snapshot??captured?.Frame;if(frame?.Decision==null){Clear();return;}built=true;Root.style.minHeight=StyleKeyword.Null;status.text="";ClearGroupPreviews();
             var floating=frame.ViewerMana==null?"":string.Join(", ",System.Linq.Enumerable.Select(System.Linq.Enumerable.Where(frame.ViewerMana,pair=>pair.Value>0),pair=>pair.Key+" "+pair.Value));manaPool.text=string.IsNullOrEmpty(floating)?"":"Floating mana: "+floating;manaPool.style.display=string.IsNullOrEmpty(floating)?DisplayStyle.None:DisplayStyle.Flex;StableStatusText.Set(prompt,OpeningHandFan.PlainPrompt(frame.Decision.Prompt??"Choose an action"),!frame.Decision.IsPriority);Root.style.display=DisplayStyle.Flex;controls.Clear();pages.Clear();numericSubmit=null;cardChoices=null;
             if(!string.IsNullOrEmpty(frame.PaymentReason)){status.text="Manual payment required: "+frame.PaymentReason.Replace('_',' ').ToLowerInvariant()+".";UnityEngine.Debug.Log("Manaforge payment fallback: "+frame.PaymentReason);}
             Root.EnableInClassList("session-request",frame.Decision.RequestId!=null);
             IsLibraryOrdering=LibraryOrdering(prompt.text);
             Root.EnableInClassList("library-ordering",IsLibraryOrdering);
-            if(frame.Decision.Groups.Count>0){BuildGroups(captured);controls.SetEnabled(captured.CanSubmit && pending==null);return;}
+            if(frame.Decision.Groups.Count>0){BuildGroups(captured,frame);controls.SetEnabled(captured.CanSubmit && pending==null);return;}
             int total=frame.Actions.Count+frame.Decision.Options.Count;int start=0,end=total;
             for(int i=start;i<end;i++) {
                 if(i<frame.Actions.Count){var action=frame.Actions[i];AddChoice(Button("decision-action-"+i,action.Label,()=>Send(captured,()=>host.PerformAsync(captured,action))),action.ObjectId!=null);AddTurnPass(captured,action);}
@@ -284,11 +294,11 @@ namespace Manaforge.Play
             if(frame.Decision.Family=="number" || frame.Decision.Family=="amounts")BuildNumbers(captured,frame.Decision);
             controls.SetEnabled(captured.CanSubmit && pending==null);
         }
-        private void BuildGroups(ViewerDecisionOffer captured)
+        private void BuildGroups(ViewerDecisionOffer captured,ProjectedDecisionFrame frame)
         {
             ProjectedChoiceOption selected=null;
             var groupScroll=new ScrollView(ScrollViewMode.Vertical){name="decision-groups"};groupScroll.style.maxHeight=420;controls.Add(groupScroll);
-            foreach(var group in captured.Frame.Decision.Groups){
+            foreach(var group in frame.Decision.Groups){
                 var tile=new VisualElement{name="choice-group"};tile.AddToClassList("mf-menu");tile.style.marginBottom=12;
                 tile.Add(NumericLabel(group.Label+" · "+group.Cards.Count+" cards"));
                 var scroll=new ScrollView(ScrollViewMode.Vertical);scroll.style.maxHeight=390;tile.Add(scroll);
@@ -298,7 +308,7 @@ namespace Manaforge.Play
                     if(card.Hidden)view.Conceal();else{view.BindUnavailable();view.UpdateValues(new CardDisplayValues(card.Name,null,card.TypeLine,card.Rules,null,"Pile card"));}
                     scroll.Add(view);groupPreviews.Add(view);
                 }
-                ProjectedChoiceOption option=null;foreach(var candidate in captured.Frame.Decision.Options)if(candidate.OptionId==group.OptionId)option=candidate;
+                ProjectedChoiceOption option=null;foreach(var candidate in frame.Decision.Options)if(candidate.OptionId==group.OptionId)option=candidate;
                 if(option==null)continue;
                 tile.Add(Button("decision-group-"+group.GroupId,(selectedGroup==group.OptionId?"Selected: ":"")+option.Label,()=>{selectedGroup=group.OptionId;Build();}));groupScroll.Add(tile);
                 if(selectedGroup==group.OptionId)selected=option;

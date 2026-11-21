@@ -10,6 +10,13 @@ namespace Manaforge.Play.Tests
 {
     public sealed class ArenaTablePresentationTests
     {
+        [Test] public void LiveAcceptanceWaitsThroughReadOnlyOpponentUpdates()
+        {
+            var wire=(JObject)JObject.Parse(File.ReadAllText(Path.Combine(Application.dataPath,"../../mtg_play/protocol/fixtures/wire-receive-v1.json")))["positive"][0]["envelope"].DeepClone();
+            var snapshot=wire["body"]["snapshot"];snapshot["decision"]=null;snapshot["actions"]=new JArray();
+            var frame=ViewerDecisionProjection.ParseSnapshot(wire.ToString(),(string)snapshot["session_id"],(string)snapshot["viewer_id"],0,true);
+            Assert.That(new LiveGameAcceptanceDriver().Tick(null,null,frame),Is.False,"Only a terminal result ends acceptance; waiting observations keep both clients alive");
+        }
         [UnityTest] public IEnumerator AttackArrowFollowsDefendingPlayerPanelWithoutNewSnapshots()
         {
             var node=new GameObject("Moving combat endpoint");var settings=ScriptableObject.CreateInstance<PanelSettings>();settings.themeStyleSheet=Resources.Load<ThemeStyleSheet>("CardTheme");var target=new RenderTexture(1280,720,24);target.Create();settings.targetTexture=target;
@@ -84,7 +91,7 @@ namespace Manaforge.Play.Tests
                     CardView retiring=null;table.Surface.VisitPresented((card,view)=>{if(card.ObjectId=="dork")retiring=view;});retiring.Focus();using(var enter=PointerEnterEvent.GetPooled()){enter.target=retiring;retiring.SendEvent(enter);}yield return null;
                     snapshot["revision"]=(long)snapshot["revision"]+1;spell["zone"]=zone;spell["presentation_id"]="dork-"+zone;
                     Assert.That(table.Surface.TryPresent(ticket,ViewerCardProjection.ParseSnapshot(wire.ToString(),session,viewer,0,true)),Is.True);table.Present(ViewerDecisionProjection.ParseSnapshot(wire.ToString(),session,viewer,0,true));yield return null;yield return null;
-                    Assert.That(retiring.parent,Is.Null,"A detached card must never be re-added by the previous hand layout");Assert.That(table.Surface.CardsRoot.Query<CardView>().ToList().Count,Is.EqualTo(2));
+                    Assert.That(retiring.parent,Is.Null,"A detached card must never be re-added by the previous hand layout");Assert.That(table.Surface.CardsRoot.Query<CardView>().ToList().Count+root.Q("stack-cards").Query<CardView>().ToList().Count,Is.EqualTo(2));
                     CardView current=null;table.Surface.VisitPresented((card,view)=>{if(card.ObjectId=="dork")current=view;});Assert.That(current,Is.Not.SameAs(retiring));Assert.That(current.panel,Is.SameAs(root.panel));
                     for(int pick=0;pick<4;pick++)Assert.DoesNotThrow(()=>root.panel.Pick(current.worldBound.center));
                     LogAssert.NoUnexpectedReceived();

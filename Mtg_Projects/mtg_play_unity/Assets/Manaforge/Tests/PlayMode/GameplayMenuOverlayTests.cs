@@ -30,6 +30,26 @@ namespace Manaforge.Play.Tests
                 menu.Open();Click(root,"game-menu-concede");Click(root,"game-menu-confirm-concede");yield return new WaitForSecondsRealtime(.15f);Assert.That(sends,Is.EqualTo(1));Assert.That(root.Q<Label>("game-menu-status").text,Does.Contain("fixture rejection"));menu.EndMatch();Assert.That(menu.IsOpen,Is.False);menu.Open();Click(root,"game-leave");Assert.That(returns,Is.EqualTo(1));Assert.That(menu.IsOpen,Is.False);
             }finally{menu.Dispose();UnityEngine.Object.Destroy(node);UnityEngine.Object.Destroy(settings);}yield return null;
         }
+        [UnityTest] public IEnumerator EscapeMenuStaysOpenWhenResultIsPresentedEveryFrame()
+        {
+            var node=new UnityEngine.GameObject("Ended menu test");var settings=ScriptableObject.CreateInstance<PanelSettings>();var doc=node.AddComponent<UIDocument>();doc.panelSettings=settings;var root=doc.rootVisualElement;
+            int sends=0,returns=0;
+            var menu=new GameplayMenuOverlay(root,()=>true,()=>{sends++;return Task.FromResult<TrackedCommand>(null);},id=>null,returnToManaforge:()=>returns++);
+            try{
+                yield return null;menu.Open();menu.EndMatch();Assert.That(menu.IsOpen,Is.False);
+                Assert.That(root.Q<Button>("game-menu-concede").enabledSelf,Is.False);
+                Press(root,KeyCode.Escape);Press(root,KeyCode.Escape,false);
+                for(int frame=0;frame<3;frame++){yield return null;menu.EndMatch();Assert.That(menu.IsOpen,Is.True,"Repeated result presentation must not close the Escape menu");}
+                Click(root,"game-menu-options");menu.EndMatch();
+                Assert.That(root.Q("game-menu-options-page").style.display.value,Is.EqualTo(DisplayStyle.Flex));
+                Press(root.Q<Button>("game-menu-back"),KeyCode.Escape);Press(root,KeyCode.Escape,false);yield return null;
+                Press(root.Q<Button>("game-menu-resume"),KeyCode.Escape);Press(root,KeyCode.Escape,false);yield return null;
+                Assert.That(menu.IsOpen,Is.False);
+                Press(root,KeyCode.Escape);Press(root,KeyCode.Escape,false);menu.EndMatch();
+                Assert.That(menu.IsOpen,Is.True);Click(root,"game-leave");
+                Assert.That(returns,Is.EqualTo(1));Assert.That(sends,Is.Zero);
+            }finally{menu.Dispose();UnityEngine.Object.Destroy(node);UnityEngine.Object.Destroy(settings);}yield return null;
+        }
         [UnityTest] public IEnumerator DisplayButtonLivesOnlyInOptionsAndF11DoesNotNavigateMenu()
         {
             var node=new UnityEngine.GameObject("Display menu test");var settings=ScriptableObject.CreateInstance<PanelSettings>();var doc=node.AddComponent<UIDocument>();doc.panelSettings=settings;var root=doc.rootVisualElement;

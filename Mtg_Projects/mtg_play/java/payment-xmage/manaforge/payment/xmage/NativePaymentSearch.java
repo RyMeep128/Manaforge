@@ -177,6 +177,10 @@ public final class NativePaymentSearch {
         try{allocate(root,payer,payment,initial);}catch(PaymentSimulationPlayer.ChoiceRequired choice){return new Result(Outcome.CONSEQUENTIAL_CHOICE_REQUIRED,Collections.emptyList(),nodes);}
         if(initial.isPaid())return new Result(Outcome.READY,Collections.emptyList(),nodes);
         Set<UUID> permitted=new HashSet<>(Arrays.asList(visibleSources));
+        // Mana is paid before remaining activation costs. Do not consume the
+        // permanent that the enclosing ability still needs to tap.
+        if(paying.getAbilityType().isActivatedAbility())for(Cost cost:paying.getCosts())
+            if(cost instanceof TapSourceCost)permitted.remove(paying.getSourceId());
         PriorityQueue<Node> queue=new PriorityQueue<>(Comparator.comparingInt((Node n)->n.steps.size()+unpaid(n.cost)).thenComparingInt(n->unpaid(n.cost)).thenComparing(n->n.steps.isEmpty()?"":n.steps.get(n.steps.size()-1).source.toString()));
         Node start=new Node(root,initial,Collections.emptyList());queue.add(start);
         int[] greedyNodes={0};Node best=greedy(start,payer,payment,permitted,deadline,greedyNodes,maxNodes);nodes=greedyNodes[0];

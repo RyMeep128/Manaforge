@@ -91,6 +91,62 @@ namespace Manaforge.Play.Tests
             snapshot["objects"][0]["zone"]=stack?"stack":"hand";
             snapshot["actions"]=new JArray(new JObject{["action_id"]="pass-"+revision,["kind"]="pass",["object_id"]=null,["label"]="Pass priority",["priority_class"]="unknown"});return wire;
         }
+        [UnityTest] public IEnumerator ConfirmedPassRetiresItsOfferBeforeTheNextSnapshotAndNeverResendsIt()
+        {
+            var initial=PrioritySnapshot(stack:true);initial["body"]["snapshot"]["actions_complete"]=true;
+            var host=Start(initial,out var peer,out var owner);var panel=Panel(host);panel.UseUnifiedPriorityActions(()=>{});
+            yield return Show(host,panel);yield return Until(()=>{host.Tick();panel.Tick();return peer.PendingCommandBytes>0;});
+            var old=host.CurrentDecision;Assert.That(old,Is.Not.Null);
+            var read=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>read.IsCompleted);
+            peer.ReplyForFixture(Ack(read.Result,"confirmed"));yield return Until(()=>old.Frame==null);
+            Assert.That(old.CanSubmit,Is.False);Assert.That(host.CurrentDecision,Is.Null);
+            for(int i=0;i<5;i++){host.Tick();panel.Tick();yield return null;}
+            Assert.That(peer.PendingCommandBytes,Is.Zero,"Confirmation must not reopen a consumed decision during the snapshot gap");Assert.That(panel.Priority.Current.Paused,Is.False);
+            var next=PrioritySnapshot(8);next["body"]["snapshot"]["actions_complete"]=true;peer.ReplyForFixture(next);
+            yield return Until(()=>{host.Tick();panel.Tick();return host.HasPresentedRevision(8) && panel.CanPassPriority;});
+            Assert.That(panel.Priority.Current.Paused,Is.False);Assert.That(panel.CurrentOffer,Is.Not.SameAs(old));
+        }
+        [UnityTest] public IEnumerator WaitingSnapshotsRevokeActionsAndRestoreTheNextPriorityOffer()
+        {
+            var host=Start(PrioritySnapshot(),out var peer,out var owner);var panel=Panel(host);panel.UseUnifiedPriorityActions(()=>{});panel.Priority.Current.Automatic=false;
+            yield return Show(host,panel);var primary=panel.Root.Q<Button>("priority-actions-primary");
+            var old=host.PresentedDecision;
+            var waiting=PrioritySnapshot(8);waiting["body"]["snapshot"]["decision"]=null;waiting["body"]["snapshot"]["actions"]=new JArray();
+            peer.ReplyForFixture(waiting);yield return Until(()=>host.CurrentDecision==null);
+            Assert.That(old.Frame,Is.Null,"A network update revokes a retained offer before the next UI tick");
+            for(int i=0;i<3;i++){host.Tick();Assert.DoesNotThrow(()=>panel.Tick());yield return null;}
+            Assert.That(primary.enabledInHierarchy,Is.False);Assert.That(peer.PendingCommandBytes,Is.Zero);
+            var next=PrioritySnapshot(9);peer.ReplyForFixture(next);yield return Until(()=>{host.Tick();panel.Tick();return host.HasPresentedRevision(9) && panel.CanPassPriority;});
+            Assert.That(panel.Root.Q<Button>("priority-actions-primary"),Is.SameAs(primary));Assert.That(primary.enabledInHierarchy,Is.True);
+        }
+        [UnityTest] public IEnumerator IncomingBoardUpdatesCannotInterruptTheDecisionUiLoop()
+        {
+            var host=Start(PrioritySnapshot(),out var peer,out var owner);var panel=Panel(host);panel.UseUnifiedPriorityActions(()=>{});panel.Priority.Current.Automatic=false;
+            yield return Show(host,panel);
+            var send=Task.Run(()=>{for(int revision=8;revision<=41;revision++){
+                var next=PrioritySnapshot(revision);if(revision%2==0){next["body"]["snapshot"]["decision"]=null;next["body"]["snapshot"]["actions"]=new JArray();}
+                peer.ReplyForFixture(next);Thread.Sleep(2);
+            }});
+            yield return Until(()=>{for(int i=0;i<30;i++){host.Tick();panel.Tick();}return send.IsCompleted && host.HasPresentedRevision(41) && panel.CanPassPriority;});
+            send.GetAwaiter().GetResult();Assert.That(peer.PendingCommandBytes,Is.Zero);
+        }
+        [UnityTest] public IEnumerator EndTurnStopsForResponsesAndShiftClickExplicitlyForcesTheTurn()
+        {
+            var host=Start(PrioritySnapshot(),out var peer,out var owner);var panel=Panel(host);panel.UseUnifiedPriorityActions(()=>{});panel.PresentationHold=()=>true;
+            var root=node.GetComponent<UIDocument>().rootVisualElement;root.style.width=1280;root.style.height=720;panel.Root.style.width=275;
+            yield return Show(host,panel);yield return null;
+            var secondary=panel.Root.Q<Button>("priority-actions-secondary");var gestureEvents=new List<string>();secondary.clickable.clickedWithEventInfo+=ev=>gestureEvents.Add(ev.GetType().Name+":"+panel.Priority.Current.Yield);Click(secondary);panel.Tick();
+            Assert.That(panel.Priority.Current.Yield,Is.EqualTo("response"));panel.CancelPriorityYield();panel.Tick();yield return null;
+            Assert.That(secondary.enabledInHierarchy,Is.True);
+            Assert.That(secondary.clickable.activators.Any(filter=>filter.button==MouseButton.LeftMouse && filter.modifiers==EventModifiers.Shift),Is.True);
+            // Runtime panels do not update native pointer picking from SendEvent alone.
+            // Use the same toolkit click path as NavigationSubmit, retaining the modifier.
+            var simulate=typeof(Clickable).GetMethod("SimulateSingleClick",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic);
+            Assert.That(simulate,Is.Not.Null);
+            using(var up=PointerUpEvent.GetPooled(new Event{type=EventType.MouseUp,button=0,modifiers=EventModifiers.Shift,mousePosition=secondary.worldBound.center}))simulate.Invoke(secondary.clickable,new object[]{up,0});
+            panel.Tick();
+            Assert.That(panel.Priority.Current.Yield,Is.EqualTo("end-turn"),string.Join(",",gestureEvents));Assert.That(peer.PendingCommandBytes,Is.Zero,"Choosing a mode cannot bypass presentation or submission guards");
+        }
         [UnityTest] public IEnumerator CombinedPriorityKeepsButtonsAndGeometryAcrossPassingAndBindsOnlyCurrentOffer()
         {
             var host=Start(PrioritySnapshot(),out var peer,out var owner);var panel=Panel(host);panel.UseUnifiedPriorityActions(()=>{});panel.Priority.Current.Automatic=false;panel.PresentationHold=()=>true;GameplayTheme.Attach(panel.Root);
@@ -99,7 +155,7 @@ namespace Manaforge.Play.Tests
             var area=panel.Root.Q("priority-actions");var primary=panel.Root.Q<Button>("priority-actions-primary");var secondary=panel.Root.Q<Button>("priority-actions-secondary");
             var original=area.worldBound;var primaryBounds=primary.worldBound;var secondaryBounds=secondary.worldBound;
             Assert.That(primary.text,Is.EqualTo("Next"));Assert.That(secondary.text,Is.EqualTo("End turn"));var more=panel.Root.Q<Button>("priority-actions-more");Assert.That(more.resolvedStyle.width,Is.EqualTo(36));Assert.That(secondary.worldBound.xMax,Is.LessThanOrEqualTo(more.worldBound.xMin-8));
-            Click(secondary);panel.Tick();yield return null;Assert.That(panel.Priority.Current.Yield,Is.EqualTo("end-turn"));Assert.That(primary.text,Is.EqualTo("Cancel"));
+            Click(secondary);panel.Tick();yield return null;Assert.That(panel.Priority.Current.Yield,Is.EqualTo("response"));Assert.That(primary.text,Is.EqualTo("Cancel"));
             Assert.That(panel.Root.Q("yield-status").style.display.value,Is.EqualTo(DisplayStyle.None));Assert.That(panel.Root.Q("decision-body").style.display.value,Is.EqualTo(DisplayStyle.None));
             foreach(int revision in new[]{8,9,10}){
                 var next=PrioritySnapshot(revision);next["body"]["snapshot"]["decision"]["prompt"]=revision%2==0?"Play instants and activated abilities":"Play spells and abilities";
@@ -221,7 +277,7 @@ namespace Manaforge.Play.Tests
             var host=Start(Snapshot(selection:true),out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);Click(panel.Root.Q<Button>("decision-option-0"));var read=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>read.IsCompleted);var command=read.Result;
             foreach(string outcome in new[]{"submitted","confirmed"}) {
                 var send=Task.Run(()=>peer.ReplyForFixture(Ack(command,outcome)));yield return Until(()=>send.IsCompleted);send.GetAwaiter().GetResult();var receipt=Receipt(host);yield return Until(()=>receipt.IsCompleted);Assert.That(receipt.Result.State,Is.EqualTo(outcome=="submitted"?CommandState.Submitted:CommandState.Confirmed));
-                string expected=outcome=="submitted"?"Waiting for the game to update…":"Action accepted. Waiting for the game to update…";yield return Until(()=>{panel.Tick();return panel.Root.Q<Label>("decision-status").text==expected;});Assert.That(panel.Root.Q<VisualElement>("decision-controls").enabledSelf,Is.EqualTo(outcome=="confirmed"));
+                string expected=outcome=="submitted"?"Waiting for the game to update…":"Action accepted. Waiting for the game to update…";yield return Until(()=>{panel.Tick();return panel.Root.Q<Label>("decision-status").text==expected;});Assert.That(panel.Root.Q<VisualElement>("decision-controls").enabledSelf,Is.False,"A confirmed decision stays retired until a fresh offer arrives");
             }
         }
         [UnityTest] public IEnumerator PanelRejectFeedbackCannotOverwriteTheNextCommandWithRepeatedOldReceipt()
@@ -259,13 +315,13 @@ namespace Manaforge.Play.Tests
             if(multiple){var extra=snapshot["actions"][0].DeepClone();extra["action_id"]="another-action";extra["kind"]="activate";extra["label"]="Second offered action";((JArray)snapshot["actions"]).Add(extra);}
             return frame;
         }
-        [UnityTest] public IEnumerator SingleNativeAbilityChoosesOnceAndMultipleAbilitiesWaitForInput()
+        [UnityTest] public IEnumerator NativeAbilityChoicesAlwaysWaitForManualInput()
         {
             foreach(int count in new[]{1,2}){
                 var envelope=Snapshot(selection:true);var decision=envelope["body"]["snapshot"]["decision"];decision["ability_selection"]=true;decision["is_priority"]=false;decision["can_finish"]=false;
                 if(count==2){var other=decision["options"][0].DeepClone();other["option_id"]="other-ability";((JArray)decision["options"]).Add(other);}
                 var host=Start(envelope,out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);
-                if(count==2){for(int i=0;i<5;i++)panel.Tick();Assert.That(peer.PendingCommandBytes,Is.Zero);Click(panel.Root.Q<Button>("decision-option-1"));}
+                for(int i=0;i<5;i++)panel.Tick();Assert.That(peer.PendingCommandBytes,Is.Zero);Click(panel.Root.Q<Button>(count==1?"decision-option-0":"decision-option-1"));
                 var read=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>read.IsCompleted);
                 Assert.That((string)read.Result["body"]["operation"],Is.EqualTo("choose"));Assert.That((string)read.Result["body"]["option_id"],Is.EqualTo(count==1?"fixture-option":"other-ability"));
                 var rejected=Ack(read.Result,"rejected");rejected["body"]["code"]="ENGINE_REJECTED";var send=Task.Run(()=>peer.ReplyForFixture(rejected));yield return Until(()=>send.IsCompleted);var receipt=Receipt(host);yield return Until(()=>receipt.IsCompleted);yield return null;

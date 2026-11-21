@@ -1,7 +1,10 @@
 # Run Unity validation directly on the activated Windows desktop account.
 param(
     [string]$Python = "$env:LOCALAPPDATA/Programs/Python/Python313/python.exe",
-    [string]$Jdk = 'C:/Program Files/Java/jdk-23'
+    [string]$Jdk = 'C:/Program Files/Java/jdk-23',
+    [string]$PlayModeFilter,
+    [ValidateSet('authenticated-ui', 'multiplayer')][string]$ResumeAt,
+    [switch]$BuildOnly
 )
 $ErrorActionPreference = 'Stop'
 if (-not $IsWindows) { throw 'Unity validation requires Windows and an activated Unity Hub installation' }
@@ -33,7 +36,17 @@ $reportPath = Join-Path $runRoot 'validation.json'
 $report = [ordered]@{ schema = 1; commit = $commit; dirty = $dirty; status = 'running';
     started = [DateTime]::UtcNow.ToString('o'); stages = @() }
 function Save-Report { $report | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $reportPath -Encoding utf8 }
+$resumeReached = -not $ResumeAt
+$resumeStage = if ($ResumeAt -eq 'authenticated-ui') { 'Packaged authenticated decision UI fixture' } else { 'Install standalone multiplayer relay' }
 function Invoke-Stage([string]$Name, [scriptblock]$Action) {
+    if ($ResumeAt -and -not $script:resumeReached) {
+        if ($Name -eq $resumeStage) { $script:resumeReached = $true }
+        elseif ($Name -notin @('Install local validation dependencies', 'Build Windows player', 'Prepare hash-pinned real engine')) {
+            $report.stages += @{ name = $Name; status = 'skipped'; reason = 'Scoped acceptance continuation; consult earlier evidence for this stage' }
+            Save-Report
+            return
+        }
+    }
     Write-Output "=== $Name ==="
     $global:LASTEXITCODE = 0
     try {
@@ -48,6 +61,32 @@ function Invoke-Stage([string]$Name, [scriptblock]$Action) {
 Save-Report
 Start-Transcript -Path (Join-Path $runRoot 'validation.log') | Out-Null
 try {
+    if ($BuildOnly) {
+        if ($ResumeAt -or $PlayModeFilter) { throw 'BuildOnly cannot be combined with test or acceptance scopes' }
+        $report.scope = 'build-only'
+        $report.tests = 'skipped'
+        Invoke-Stage 'Build Windows player' {
+            $scenePath = Join-Path $root 'Mtg_Projects/mtg_play_unity/Assets/Manaforge/Scenes/Foundation.unity'
+            $sceneBefore = [IO.File]::ReadAllBytes($scenePath)
+            $settingsPath = Join-Path $root 'Mtg_Projects/mtg_play_unity/ProjectSettings/ProjectSettings.asset'
+            $settingsBefore = [IO.File]::ReadAllBytes($settingsPath)
+            try { ./tools/unity-play.ps1 -Mode Build }
+            finally { [IO.File]::WriteAllBytes($scenePath, $sceneBefore); [IO.File]::WriteAllBytes($settingsPath, $settingsBefore) }
+        }
+        $report.status = 'built'
+        return # Explicitly skips tests and never claims acceptance.
+    }
+    if ($ResumeAt -and $PlayModeFilter) { throw 'Choose either PlayModeFilter or ResumeAt' }
+    if ($ResumeAt) { $report.scope = 'acceptance-continuation'; $report.resumedAt = $ResumeAt }
+    if ($PlayModeFilter) {
+        $report.scope = 'playmode-regression'
+        $report.testFilter = $PlayModeFilter
+        Invoke-Stage 'Focused PlayMode regression only' {
+            ./tools/unity-play.ps1 -Mode PlayMode -Graphics -TestFilter $PlayModeFilter
+        }
+        $report.status = 'passed'
+        return # Diagnostics only; never archive this as full player acceptance.
+    }
     Invoke-Stage 'Install local validation dependencies' {
         python -m pip install -r requirements-dev.txt
         if ($LASTEXITCODE -ne 0) { throw 'Local validation dependencies failed' }
@@ -154,6 +193,7 @@ try {
     Stop-Transcript | Out-Null
     Write-Output "Local Unity evidence: $reportPath"
 }
+if ($ResumeAt) { return } # Scoped evidence is never a full release acceptance archive.
 if ($report.dirty) {
     Write-Output 'Local validation passed for a modified workspace. Commit changes and rerun before release packaging.'
 } else {

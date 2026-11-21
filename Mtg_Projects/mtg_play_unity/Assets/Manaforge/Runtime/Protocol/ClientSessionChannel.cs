@@ -54,7 +54,7 @@ namespace Manaforge.Play.Protocol
         private string decision,shutdownReason;
         private long revision;
         private bool resultSeen,shutdownRequested,matchActive;
-        public bool CanConcede {get{lock(gate)return state==ClientChannelState.Active && matchActive && !resultSeen && !shutdownRequested && commands.CanSubmit;}}
+        public bool CanConcede {get{lock(gate)return state==ClientChannelState.Active && matchActive && !resultSeen && !shutdownRequested && commands.CanConcede;}}
         public TrackedCommand Concede(int milliseconds=5000,CancellationToken cancellation=default)
         {
             PreparedSubmission prepared;lock(gate){Open();var text=new JObject{["wire_version"]=1,["message_type"]="command",["message_id"]="ui_"+Guid.NewGuid().ToString("N"),["body"]=new JObject{["session_id"]=session,["viewer_id"]=viewer,["revision"]=revision,["operation"]="concede"}}.ToString(Formatting.None);prepared=PrepareSubmission(text);}
@@ -189,7 +189,17 @@ namespace Manaforge.Play.Protocol
                         }
                         return new ClientReceive(type,applied);
                     }
-                    if(type=="ack"){var receipt=commands.Accept(text);if(NetworkTiming && receipt.CommandId==timingCommand){timingConfirmed=receipt.State==CommandState.Confirmed;Timing("unity_ack_"+receipt.State,receipt.RequestRevision);}return new ClientReceive(type,true,receipt);}
+                    if(type=="ack"){
+                        var receipt=commands.Accept(text);
+                        // A native-confirmed operation consumed this offer. Keep it
+                        // retired through the ACK-to-snapshot gap, under the same
+                        // admission lock; an older receipt cannot retire a new offer.
+                        if(receipt.State==CommandState.Confirmed){
+                            if(receipt.DecisionId==null){matchActive=false;ClearDecision();}
+                            else if(receipt.RequestRevision==revision && receipt.DecisionId==decision)ClearDecision();
+                        }
+                        if(NetworkTiming && receipt.CommandId==timingCommand){timingConfirmed=receipt.State==CommandState.Confirmed;Timing("unity_ack_"+receipt.State,receipt.RequestRevision);}return new ClientReceive(type,true,receipt);
+                    }
                     if(type=="error"){string code=commands.AcceptSessionError(text);Stop(code);return new ClientReceive(type);}
                     if(type=="shutdown") {
                         var body=WireMessages.Parse(text)["body"];

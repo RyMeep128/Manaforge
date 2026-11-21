@@ -25,12 +25,13 @@ namespace Manaforge.Play.Tests
             node=new GameObject("Decision binding tests");settings=ScriptableObject.CreateInstance<PanelSettings>();settings.themeStyleSheet=Resources.Load<ThemeStyleSheet>("CardTheme");var doc=node.AddComponent<UIDocument>();doc.panelSettings=settings;surface=new ViewerCardSurface(doc.rootVisualElement);yield return null;
         }
         [UnityTearDown] public IEnumerator Cleanup(){surface.Dispose();UnityEngine.Object.Destroy(node);UnityEngine.Object.Destroy(settings);yield return null;}
-        [UnityTest] public IEnumerator PendingReceiptsKeepThePromptButNeverEnableAnotherSubmission()
+        [UnityTest] public IEnumerator SubmittedReceiptKeepsPromptAndConfirmationRetiresItUntilAFreshOffer()
         {
             using var pair=new ViewerSessionReceiverTests.Pair();var ticket=surface.BeginViewer("fixture-session","one");using var receiver=new ViewerSessionReceiver(pair.Channel,ticket,true);pair.Send(Snapshot());yield return Read(receiver);var offer=receiver.Decisions.Current;Assert.That(offer,Is.Not.Null);Assert.That(offer.CanSubmit,Is.True);
             var command=Message("command","c1",new JObject{["session_id"]="fixture-session",["viewer_id"]="one",["revision"]=7,["operation"]="perform",["decision_id"]="fixture-decision",["action_id"]="fixture-action"});
             var send=Task.Run(()=>pair.Channel.Submit(command.ToString()));yield return Until(()=>send.IsCompleted);send.GetAwaiter().GetResult();TextFrame.Read(pair.Peer.GetStream());Assert.That(offer.Frame,Is.Not.Null);Assert.That(offer.CanSubmit,Is.False);
-            foreach(string outcome in new[]{"submitted","confirmed"}){pair.Send(Message("ack","ack-"+outcome,new JObject{["session_id"]="fixture-session",["viewer_id"]="one",["command_id"]="c1",["request_revision"]=7,["outcome"]=outcome,["code"]=JValue.CreateNull()}));yield return Read(receiver);Assert.That(receiver.Decisions.Current,Is.SameAs(offer));Assert.That(offer.CanSubmit,Is.EqualTo(outcome=="confirmed"));}
+            foreach(string outcome in new[]{"submitted","confirmed"}){pair.Send(Message("ack","ack-"+outcome,new JObject{["session_id"]="fixture-session",["viewer_id"]="one",["command_id"]="c1",["request_revision"]=7,["outcome"]=outcome,["code"]=JValue.CreateNull()}));yield return Read(receiver);if(outcome=="submitted")Assert.That(receiver.Decisions.Current,Is.SameAs(offer));else{Assert.That(receiver.Decisions.Current,Is.Null);Assert.That(offer.Frame,Is.Null);}Assert.That(offer.CanSubmit,Is.False);}
+            pair.Send(Snapshot("fresh",8));yield return Read(receiver);Assert.That(receiver.Decisions.Current,Is.Not.SameAs(offer));Assert.That(receiver.Decisions.Current.CanSubmit,Is.True);
             receiver.Cancel();Assert.That(offer.Frame,Is.Null);Assert.That(offer.CanSubmit,Is.False);
         }
         [UnityTest] public IEnumerator AnotherSnapshotRetiresOldOfferEvenWhenAllEngineTokensAreIdentical()

@@ -27,6 +27,48 @@ public final class NativeMultiViewerChecks {
         throw new AssertionError("NATIVE_PRIORITY_NOT_PAUSED");
     }
     static void resume(NativePaymentAcceptanceChecks.Engine e) throws Exception {e.payer.setResponseBoolean(false);e.running.get(5,TimeUnit.SECONDS);check(e.queries.isEmpty(),"NATIVE_PRIORITY_NOT_CONSUMED");}
+    static void waitingViewerMetadata(NativePaymentAcceptanceChecks.Engine e,Card card) throws Exception {
+        JsonObject request=new JsonObject();JsonArray ids=new JsonArray();ids.add(card.getId().toString());request.add("object_ids",ids);request.add("identified_ids",ids.deepCopy());
+        int cycle=e.game.getState().getApplyEffectsCounter();
+        JsonObject guard=ManaforgeGameMetadata.readPaused(e.game,e.opponent.getId(),cycle,request,()->new GameView(e.game.getState(),e.game,e.opponent.getId(),null));
+        check(new JsonPrimitive("ok").equals(guard.get("status")),"WAITING_VIEWER_METADATA_UNAVAILABLE");
+        check(guard.get("cycle").getAsInt()==cycle && guard.getAsJsonObject("objects").has(card.getId().toString()),"WAITING_VIEWER_ORGANIZATION_BASIS_MISSING");
+        check(!guard.getAsJsonObject("objects").getAsJsonObject(card.getId().toString()).get("controller").isJsonNull(),"WAITING_VIEWER_CONTROLLER_MISSING");
+        check(!e.running.isDone() && cycle==e.game.getState().getApplyEffectsCounter(),"WAITING_METADATA_ADVANCED_ENGINE");
+    }
+    static JsonArray smartFacts(NativePaymentAcceptanceChecks.Engine e,UUID viewer) {
+        GameView view=new GameView(e.game.getState(),e.game,viewer,null);Set<UUID> known=new HashSet<>(view.getStack().keySet());known.addAll(view.getMyHand().keySet());
+        for(PlayerView seat:view.getPlayers())known.addAll(seat.getBattlefield().keySet());
+        int cycle=e.game.getState().getApplyEffectsCounter(),stack=e.game.getStack().size();
+        JsonArray hints=ManaforgeGameMetadata.priorityHints(e.game,viewer,view,known);
+        check(cycle==e.game.getState().getApplyEffectsCounter() && stack==e.game.getStack().size(),"SMART_PRIORITY_MUTATED_NATIVE_STATE");return hints;
+    }
+    static void smartPriorityMechanics() throws Exception {
+        // Native ability inspection probes. These do not submit game decisions.
+        try(NativePaymentAcceptanceChecks.Engine e=new NativePaymentAcceptanceChecks.Engine()){
+            Card probe=e.load(new NativePaymentAcceptanceChecks.Probe(e.payer.getId(),"{1}"),Zone.BATTLEFIELD);
+            mage.abilities.Ability sacrifice=new mage.abilities.common.EntersBattlefieldTriggeredAbility(new mage.abilities.effects.common.SacrificeSourceEffect());
+            sacrifice.setSourceId(probe.getId());sacrifice.setControllerId(e.payer.getId());e.game.getStack().push(new mage.game.stack.StackAbility(sacrifice,e.payer.getId()));
+            check(smartFacts(e,e.payer.getId()).contains(new JsonPrimitive("self_leaves")),"GENERIC_SACRIFICE_SMART_HOLD_MISSING");e.game.getStack().clear();
+            for(String type:new String[]{"mage.cards.u.UrzasSaga","mage.cards.w.WildernessReclamation","mage.cards.u.UroTitanOfNaturesWrath"}){
+                Card card=e.load(NativePaymentAcceptanceChecks.card(type,e.payer.getId()),Zone.BATTLEFIELD);mage.abilities.Ability selected=null;
+                for(mage.abilities.Ability ability:e.game.getPermanent(card.getId()).getAbilities(e.game))if(ability.isTriggeredAbility()){
+                    String rule=ability.getRule("{this}").toLowerCase(Locale.ROOT);
+                    if(type.contains("Saga")?mage.abilities.common.SagaAbility.isFinalAbility(ability,3):type.contains("Reclamation")?rule.contains("untap"):rule.contains("sacrifice")){selected=ability.copy();break;}
+                }
+                check(selected!=null,"SMART_FIXTURE_NATIVE_TRIGGER_MISSING_"+type);selected.setSourceId(card.getId());selected.setControllerId(e.payer.getId());e.game.getStack().push(new mage.game.stack.StackAbility(selected,e.payer.getId()));
+                String expected=type.contains("Saga")?"final_saga":type.contains("Reclamation")?"untap_resources":"self_leaves";
+                check(smartFacts(e,e.payer.getId()).contains(new JsonPrimitive(expected)),"NATIVE_SMART_MECHANIC_MISSING_"+expected);e.game.getStack().clear();
+            }
+            e.load(NativePaymentAcceptanceChecks.card("mage.cards.s.SheoldredTheApocalypse",e.opponent.getId()),Zone.BATTLEFIELD);
+            check(smartFacts(e,e.payer.getId()).contains(new JsonPrimitive("draw_hazard")),"DRAW_HAZARD_SMART_HOLD_MISSING");
+            e.load(NativePaymentAcceptanceChecks.card("mage.cards.l.LutriTheSpellchaser",e.payer.getId()),Zone.HAND);
+            Card bolt=e.load(NativePaymentAcceptanceChecks.card("mage.cards.l.LightningBolt",e.payer.getId()),Zone.HAND);e.payer.getHand().remove(bolt.getId());e.game.setZone(bolt.getId(),Zone.STACK);
+            e.game.getStack().push(new mage.game.stack.Spell(bolt,bolt.getSpellAbility(),e.payer.getId(),Zone.HAND,e.game));
+            check(smartFacts(e,e.payer.getId()).contains(new JsonPrimitive("copy_spell")),"OWN_SPELL_COPY_SMART_HOLD_MISSING");
+            check(!smartFacts(e,e.opponent.getId()).contains(new JsonPrimitive("copy_spell")),"SMART_PRIORITY_LEAKED_OPPONENT_HAND");
+        }
+    }
     static Map<String,ManaforgeMatchCoordinator.Observation> observations(NativePaymentAcceptanceChecks.Engine e,PlayerQueryEvent query,AtomicInteger submissions) throws Exception {return observations(e,query,submissions,null);}
     static Map<String,ManaforgeMatchCoordinator.Observation> observations(NativePaymentAcceptanceChecks.Engine e,PlayerQueryEvent query,AtomicInteger submissions,Map<UUID,GameView> views) throws Exception {
         synchronized(e.response.get(e.payer)){
@@ -52,8 +94,31 @@ public final class NativeMultiViewerChecks {
         check(hand.contains(own) && !envelope.toString().contains(other),"PRIVATE_HAND_CROSSED_VIEWERS");
     }
     static int tappedForests(JsonObject envelope){int count=0;for(JsonElement value:snapshot(envelope).getAsJsonArray("objects")){JsonObject card=value.getAsJsonObject();if(card.get("zone").getAsString().equals("battlefield") && !card.get("characteristics").isJsonNull() && card.getAsJsonObject("characteristics").get("name").getAsString().equals("Forest") && card.get("tapped").getAsBoolean())count++;}return count;}
+    /** Exercise the live queue reader used both when idle and inside advance(). */
+    static void waitingStatePublication() throws Exception {
+        ManaforgeLiveOpening live=new ManaforgeLiveOpening();
+        java.lang.reflect.Field queueField=ManaforgeLiveOpening.class.getDeclaredField("events"),publicationField=ManaforgeLiveOpening.class.getDeclaredField("multiplayerStatePublication"),waitingField=ManaforgeLiveOpening.class.getDeclaredField("multiplayerAwaitingDecision");
+        queueField.setAccessible(true);publicationField.setAccessible(true);waitingField.setAccessible(true);
+        @SuppressWarnings("unchecked") BlockingQueue<JsonObject> queue=(BlockingQueue<JsonObject>)queueField.get(live);
+        List<JsonObject> published=new ArrayList<>();
+        Object publication=java.lang.reflect.Proxy.newProxyInstance(ManaforgeLiveOpening.class.getClassLoader(),new Class<?>[]{publicationField.getType()},(proxy,method,values)->{published.add(((JsonObject)values[0]).deepCopy());return null;});
+        publicationField.set(live,publication);waitingField.setBoolean(live,true);
+        java.lang.reflect.Method next=ManaforgeLiveOpening.class.getDeclaredMethod("next");next.setAccessible(true);
+        JsonObject update=new JsonObject();update.addProperty("event","game_state");update.addProperty("cycle",10);
+        queue.add(update);next.invoke(live);
+        update=update.deepCopy();update.addProperty("cycle",11);queue.add(update);next.invoke(live);
+        check(published.size()==2 && published.get(1).get("cycle").getAsInt()==11,"BOARD_WAITED_FOR_PRIORITY_DECISION");
+        // An existing interactive offer must retain its command authority.
+        waitingField.setBoolean(live,false);queue.add(update);next.invoke(live);
+        check(published.size()==2,"BOARD_UPDATE_REPLACED_ACTIVE_OFFER");
+        waitingField.setBoolean(live,true);
+        JsonObject decision=new JsonObject();decision.addProperty("event","decision");decision.addProperty("decision_id",12);queue.add(decision);next.invoke(live);
+        check(published.size()==2,"DECISION_PUBLISHED_AS_WAITING_BOARD");
+    }
     public static void main(String[] args) throws Exception {
-        Thread.currentThread().setName("GAME-multiview-fixture-owner");NativePaymentAcceptanceChecks.Engine e=new NativePaymentAcceptanceChecks.Engine();AtomicInteger disposed=new AtomicInteger(),submissions=new AtomicInteger();AtomicBoolean cancel=new AtomicBoolean();byte[] keyA=MatchCoordinatorChecks.key(11),keyB=MatchCoordinatorChecks.key(22);
+        waitingStatePublication();
+
+        Thread.currentThread().setName("GAME-multiview-fixture-owner");smartPriorityMechanics();NativePaymentAcceptanceChecks.Engine e=new NativePaymentAcceptanceChecks.Engine();AtomicInteger disposed=new AtomicInteger(),submissions=new AtomicInteger();AtomicBoolean cancel=new AtomicBoolean();byte[] keyA=MatchCoordinatorChecks.key(11),keyB=MatchCoordinatorChecks.key(22);
         try{
             Card forest=e.load(new mage.cards.basiclands.Forest(e.payer.getId(),NativePaymentAcceptanceChecks.info("Forest")),Zone.BATTLEFIELD);
             e.load(new mage.cards.basiclands.Forest(e.payer.getId(),NativePaymentAcceptanceChecks.info("Forest")),Zone.BATTLEFIELD);e.load(new mage.cards.basiclands.Mountain(e.opponent.getId(),NativePaymentAcceptanceChecks.info("Mountain")),Zone.BATTLEFIELD);
@@ -61,7 +126,7 @@ public final class NativeMultiViewerChecks {
             try(ManaforgeMatchCoordinator coordinator=new ManaforgeMatchCoordinator(e.game.getId().toString(),MatchCoordinatorChecks.ENGINE,MatchCoordinatorChecks.HASH,()->{disposed.incrementAndGet();e.close();},cancel::get)){
                 ManaforgeMatchCoordinator.Viewer a=coordinator.register("a",e.payer.getId().toString(),"native-session-a","viewer-a",keyA),b=coordinator.register("b",e.opponent.getId().toString(),"native-session-b","viewer-b",keyB);coordinator.start();
                 try(MatchCoordinatorChecks.Client clientA=new MatchCoordinatorChecks.Client(a,keyA,false);MatchCoordinatorChecks.Client clientB=new MatchCoordinatorChecks.Client(b,keyB,false)){
-                    PlayerQueryEvent query=priority(e,()->{});coordinator.publishNative(observations(e,query,submissions));JsonObject firstA=clientA.read(),firstB=clientB.read();privacy(firstA,"Llanowar Elves","Goblin Guide");privacy(firstB,"Goblin Guide","Llanowar Elves");check(tappedForests(firstA)==0 && tappedForests(firstB)==0,"INITIAL_NATIVE_BOARD");resume(e);
+                    PlayerQueryEvent query=priority(e,()->{});waitingViewerMetadata(e,forest);coordinator.publishNative(observations(e,query,submissions));JsonObject firstA=clientA.read(),firstB=clientB.read();privacy(firstA,"Llanowar Elves","Goblin Guide");privacy(firstB,"Goblin Guide","Llanowar Elves");check(tappedForests(firstA)==0 && tappedForests(firstB)==0,"INITIAL_NATIVE_BOARD");resume(e);
                     query=priority(e,()->check(e.game.getPermanent(forest.getId()).tap(forest.getSpellAbility(),e.game),"NATIVE_PUBLIC_TAP"));coordinator.publishNative(observations(e,query,submissions));JsonObject secondA=clientA.read(),secondB=clientB.read();privacy(secondA,"Llanowar Elves","Goblin Guide");privacy(secondB,"Goblin Guide","Llanowar Elves");check(tappedForests(secondA)==1 && tappedForests(secondB)==1,"PUBLIC_UPDATE_NOT_SHARED");
                     int cycle=e.game.getState().getApplyEffectsCounter();clientA.send("{\"wire_version\":1,\"message_type\":\"command\",\"message_id\":\"forged\",\"body\":{}}");MatchCoordinatorChecks.await(()->"READ_ONLY_TRAFFIC".equals(coordinator.status("a").reason),"NATIVE_COMMAND_TRAFFIC_ADMITTED");
                     check(submissions.get()==0 && !e.running.isDone() && cycle==e.game.getState().getApplyEffectsCounter() && disposed.get()==0,"VIEWER_TRAFFIC_MUTATED_NATIVE_MATCH");resume(e);

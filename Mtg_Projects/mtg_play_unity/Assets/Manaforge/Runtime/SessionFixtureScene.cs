@@ -18,11 +18,12 @@ namespace Manaforge.Play
         private PanelSettings settings;private UIDocument document;private Label status;private string output;
         private Task<ViewerBootstrap> reading,validated;private Task consuming;private int snapshots,events,unexpected;
         private bool capture,decisions,scripted,decisionReported;private int acknowledgements,results;private ViewerDecisionPanel decisionPanel;
+        private bool DecisionCleared=>decisionPanel!=null && decisionPanel.CurrentOffer==null && decisionPanel.Root.Q<VisualElement>("decision-controls")?.childCount==0;
         private bool Report(string name,string code,bool cleared=false)
         {
             try {
                 var report=new JObject{["probe_version"]=1,["fixture_only"]=true,["code"]=code,["snapshot_count"]=Volatile.Read(ref snapshots),["event_count"]=Volatile.Read(ref events),["viewer_cleared"]=cleared};
-                if(decisions){report["ack_count"]=Volatile.Read(ref acknowledgements);report["result_count"]=Volatile.Read(ref results);report["decision_panel_cleared"]=decisionPanel!=null && decisionPanel.Root.Q<Button>()==null;}
+                if(decisions){report["ack_count"]=Volatile.Read(ref acknowledgements);report["result_count"]=Volatile.Read(ref results);report["decision_panel_cleared"]=DecisionCleared;}
                 string path=Path.Combine(output,name+".json");File.WriteAllText(path+".tmp",report.ToString());File.Move(path+".tmp",path);return true;
             }catch{return false;}
         }
@@ -80,7 +81,7 @@ namespace Manaforge.Play
             while(!host.Completion.IsCompleted) {
                 host.Tick();decisionPanel?.Tick();
                 if(decisions && !decisionReported && Volatile.Read(ref results)==1 && host.PresentedDecision==null) {
-                    if(Volatile.Read(ref acknowledgements)!=2 || decisionPanel.Root.Q<Button>()!=null){Fail("SESSION_FIXTURE_DECISION_FAILED");yield break;}
+                    if(Volatile.Read(ref acknowledgements)!=2 || !DecisionCleared){Fail("SESSION_FIXTURE_DECISION_FAILED");yield break;}
                     status.text="Synthetic choice confirmed and fixture completed — not a live game.";
                     if(capture)yield return Capture("decision-complete.png");
                     if(!Report("decision","SESSION_FIXTURE_DECISION_COMPLETE")){Application.Quit(1);yield break;}decisionReported=true;

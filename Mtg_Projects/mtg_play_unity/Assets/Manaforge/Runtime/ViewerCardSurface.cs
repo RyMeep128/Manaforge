@@ -261,6 +261,7 @@ namespace Manaforge.Play
             if(card.Tapped==null)unavailable+=" / tap state unavailable";
             view.UpdateValues(new CardDisplayValues(c?.Name,c?.CastingCost??c?.ManaCost??(sameFace?printed.PrintedManaCost:null),c?.TypeLine,rules,pt,unavailable,binding?.Profile,loyalty:c?.Loyalty,defense:c?.Defense,hidePrintedStats:binding?.Profile?.MayHavePrintedStats??true,basePower:c?.BasePower,baseToughness:c?.BaseToughness,isAbility:card.Zone=="stack" && c?.TypeLine=="Ability"));
             view.SetCostContext(c?.ManaCost??(sameFace?printed.PrintedManaCost:null),c?.CastingCost);
+            view.SetCounters(c?.Counters==null?"":string.Join(" · ",System.Linq.Enumerable.Select(System.Linq.Enumerable.Where(c.Counters,counter=>counter.Amount>0),counter=>counter.Name+" "+counter.Amount)));
         }
         public static string DisplayRules(IReadOnlyList<string> current,IReadOnlyList<string> engineView)
         {

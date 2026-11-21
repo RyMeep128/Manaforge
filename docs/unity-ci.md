@@ -71,6 +71,16 @@ Missing or mismatched evidence fails packaging; there is no hosted Unity build
 fallback. Python application startup, Java bridge, installer, and non-Unity
 checks remain hosted. Unity gameplay checks run locally against the standalone
 player; the final combined installer does not receive a hosted Unity match run.
-Publication additionally requires the existing exact-revision protocol, native
+Normal publication additionally requires the existing exact-revision protocol, native
 payment, live-opening, and broad XMage engine checks, plus the verified local
 Unity receipt. Successful compilation alone never establishes gameplay acceptance.
+
+When the owner explicitly requests an untested alpha/beta release, dispatch `Tests`
+with `skip_tests=true`. Rebuild locally at the clean committed revision using
+`./tools/validate_unity_local.ps1 -BuildOnly`, then use
+`tools/prepare_verified_unity_player.py --create-build ARCHIVE.zip` to produce a
+checksum inventory and a `build-only` receipt with `tests: skipped`. Supply its HTTPS
+URL and SHA256 to packaging. Only this explicit mode accepts build-only receipts
+and skips publication test gates; it does not convert failed or partial validation
+into passed evidence. Application release notes disclose skipped checks and the
+known incomplete multiplayer acceptance. Push-triggered CI runs independently.

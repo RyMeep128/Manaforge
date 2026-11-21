@@ -31,6 +31,22 @@ def test_schema_is_valid_and_matches_contracts():
     assert SCHEMA == contract_schema()
 
 
+def test_smart_priority_facts_are_optional_bounded_and_explicit():
+    payload = snapshot()
+    payload.pop("priority_hints", None)
+    payload.pop("priority_object_id", None)
+    validate("GameSnapshot", payload)
+    payload["priority_hints"] = ["own_stack", "self_leaves"]
+    payload["priority_object_id"] = "viewer-local-object"
+    validate("GameSnapshot", payload)
+    payload["priority_hints"] = ["invented_engine_decision"]
+    with pytest.raises(ValidationError):
+        validate("GameSnapshot", payload)
+    payload["priority_hints"] = ["own_stack"] * 17
+    with pytest.raises(ValidationError):
+        validate("GameSnapshot", payload)
+
+
 @pytest.mark.parametrize("case", FIXTURES["cases"], ids=lambda case: case["name"])
 def test_sanitized_adapter_fixtures_validate(case):
     validate(case["record"], case["payload"])

@@ -34,7 +34,7 @@ namespace Manaforge.Play
         internal void Refresh(ViewerDecisionOffer supplied)
         {
             if(disposed || ReferenceEquals(offer,supplied))return;Clear();offer=supplied;var frame=supplied?.Frame;
-            if(frame?.Decision.Family!="mana")return;
+            if(frame?.Decision?.Family!="mana")return;
             foreach(var source in frame.ManaSourceReferences) {
                 var view=host.ManaSourceView(supplied,source);if(view==null)continue;
                 bindings.Add(new Binding(view,()=>{

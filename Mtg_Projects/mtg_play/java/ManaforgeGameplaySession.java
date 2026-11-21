@@ -123,9 +123,17 @@ public final class ManaforgeGameplaySession implements AutoCloseable {
             JsonObject card=item.getAsJsonObject();String id=card.get("id").getAsString();
             if(ids.size()<256 && new JsonPrimitive(false).equals(card.get("hidden")) && new JsonPrimitive(false).equals(card.get("face_down")) && !ids.contains(id))ids.add(id);
         }
+        // Copy inspection needs the physical printing in single-player matches too.
+        for(JsonElement seat:state.getAsJsonArray("players"))for(JsonElement item:seat.getAsJsonObject().getAsJsonArray("battlefield")){
+            JsonObject card=item.getAsJsonObject();String id=card.get("id").getAsString();
+            if(ids.size()<256 && new JsonPrimitive(true).equals(card.get("copy")) && !new JsonPrimitive(true).equals(card.get("token"))
+                && new JsonPrimitive(false).equals(card.get("hidden")) && new JsonPrimitive(false).equals(card.get("face_down")) && !ids.contains(id))ids.add(id);
+        }
     }
     static JsonObject decorate(JsonObject before,JsonObject guard) {
         JsonObject publicView=before.deepCopy();
+        if(guard.has("priority_hints"))publicView.add("priority_hints",guard.get("priority_hints").deepCopy());
+        if(guard.has("priority_object"))publicView.add("priority_object",guard.get("priority_object").deepCopy());
         // Cached GameViews can precede the final life change of a resolving effect.
         // Use public totals read under the same native response monitor/cycle as the offer.
         if(guard.has("players"))for(JsonElement item:guard.getAsJsonArray("players")){
@@ -138,7 +146,12 @@ public final class ManaforgeGameplaySession implements AutoCloseable {
             JsonObject row=card.getAsJsonObject(),entry=guard.getAsJsonObject("objects").getAsJsonObject(row.get("id").getAsString());
             if(entry!=null && entry.has("casting_cost"))row.add("casting_cost",entry.get("casting_cost"));
         }
-        for(JsonElement card:publicView.getAsJsonArray("stack")){JsonObject row=card.getAsJsonObject(),entry=guard.getAsJsonObject("objects").getAsJsonObject(row.get("id").getAsString());if(entry!=null){if(entry.has("ability_art_set") && entry.has("ability_art_number")){row.add("set",entry.get("ability_art_set"));row.add("number",entry.get("ability_art_number"));}if(entry.has("source"))row.add("target_source",entry.get("source"));if(entry.has("stack_targets")){row.add("stack_targets",entry.get("stack_targets"));row.add("stack_targets_complete",entry.get("stack_targets_complete"));}if(entry.has("controller"))row.add("stack_controller",entry.get("controller"));if(entry.has("owner"))row.add("stack_owner",entry.get("owner"));if(entry.has("source") && entry.has("spell_ability_ids"))row.add("commander_source",entry.get("source"));}}
+        for(JsonElement card:publicView.getAsJsonArray("stack")){JsonObject row=card.getAsJsonObject(),entry=guard.getAsJsonObject("objects").getAsJsonObject(row.get("id").getAsString());if(entry!=null){if(entry.has("ability_art_set") && entry.has("ability_art_number")){row.add("set",entry.get("ability_art_set"));row.add("number",entry.get("ability_art_number"));if(entry.has("ability_art_name"))row.add("art_name",entry.get("ability_art_name"));}if(new JsonPrimitive(true).equals(entry.get("stack_ability")))row.addProperty("type","Ability");if(entry.has("source"))row.add("target_source",entry.get("source"));if(entry.has("stack_targets")){row.add("stack_targets",entry.get("stack_targets"));row.add("stack_targets_complete",entry.get("stack_targets_complete"));}if(entry.has("controller"))row.add("stack_controller",entry.get("controller"));if(entry.has("owner"))row.add("stack_owner",entry.get("owner"));if(entry.has("source") && entry.has("spell_ability_ids"))row.add("commander_source",entry.get("source"));}}
+        for(JsonElement seat:publicView.getAsJsonArray("players"))for(JsonElement card:seat.getAsJsonObject().getAsJsonArray("battlefield")){
+            JsonObject row=card.getAsJsonObject(),entry=guard.getAsJsonObject("objects").getAsJsonObject(row.get("id").getAsString());
+            if(entry!=null && new JsonPrimitive(true).equals(row.get("copy")) && !new JsonPrimitive(true).equals(row.get("token")))
+                for(String field:new String[]{"physical_set","physical_number","physical_name"})if(entry.has(field))row.add(field,entry.get(field));
+        }
         for(JsonElement card:publicView.getAsJsonArray("exile")){JsonObject row=card.getAsJsonObject(),entry=guard.getAsJsonObject("objects").getAsJsonObject(row.get("id").getAsString());if(entry!=null && entry.has("owner"))row.add("exile_owner",entry.get("owner"));}
         if(guard.has("commanders")){publicView.add("commander_metadata",guard.get("commanders").deepCopy());publicView.add("commander_metadata_complete",guard.get("commander_metadata_complete"));}
         return publicView;

@@ -79,6 +79,7 @@ namespace Manaforge.Play
         private readonly ScrollView rulesScroll=new ScrollView(ScrollViewMode.Vertical){name="rules-scroll"};
         private readonly RulesTextView rulesSymbols = new RulesTextView();
         private readonly Label stats = Text("stats");
+        private readonly Label counterBox=new Label{name="card-counters",enableRichText=false,pickingMode=PickingMode.Ignore};
         private readonly Label status = Text("status");
         private readonly Label collector=Text("collector");
         private FontStyle rulesEmphasis;
@@ -109,6 +110,7 @@ namespace Manaforge.Play
             doorTabs.style.position=Position.Absolute;doorTabs.style.flexDirection=FlexDirection.Row;Add(doorTabs);
             Add(printingFooter);Add(type); Add(rulesScroll); Add(stats); Add(status);Add(miniKind);Add(loyaltyCounter);Add(collector);
             edge.style.position=Position.Absolute;Add(edge);Add(cardBack);
+            counterBox.style.position=Position.Absolute;counterBox.style.backgroundColor=new Color(.025f,.035f,.05f,.96f);counterBox.style.color=new Color(1,.88f,.65f);counterBox.style.unityFontStyleAndWeight=FontStyle.Bold;counterBox.style.whiteSpace=WhiteSpace.Normal;counterBox.style.unityTextAlign=TextAnchor.MiddleCenter;counterBox.style.borderTopLeftRadius=counterBox.style.borderTopRightRadius=counterBox.style.borderBottomLeftRadius=counterBox.style.borderBottomRightRadius=4;Add(counterBox);
             Conceal();
         }
 
@@ -175,7 +177,8 @@ namespace Manaforge.Play
             authenticOnly=Identity?.LayoutProfileId=="authentic-image-v1" || !string.IsNullOrEmpty(compactProfile?.Kind);
             Set(rules, values.RulesText); rulesSymbols.SetText(values.RulesText);
             stats.enableRichText=values.PowerToughness!=null && System.Text.RegularExpressions.Regex.IsMatch(values.PowerToughness,@"^[0-9+*−\-/]+$",System.Text.RegularExpressions.RegexOptions.CultureInvariant);
-            Set(stats,stats.enableRichText?ColoredStats(values.PowerToughness,values.BasePower,values.BaseToughness):values.PowerToughness??values.Defense);loyaltyCounter.SetValue(Array.IndexOf((values.TypeLine??"").Split('—')[0].Split(' '),"Planeswalker")>=0?values.Loyalty:null);
+            bool battle=Array.IndexOf((values.TypeLine??"").Split('—')[0].Split(' '),"Battle")>=0;
+            Set(stats,stats.enableRichText?ColoredStats(values.PowerToughness,values.BasePower,values.BaseToughness):values.PowerToughness??(battle?values.Defense:null));loyaltyCounter.SetValue(Array.IndexOf((values.TypeLine??"").Split('—')[0].Split(' '),"Planeswalker")>=0?values.Loyalty:null);
             Set(status, values.Status);Set(miniKind,compactProfile?.Kind);Set(collector,values.CollectorText);rulesEmphasis=values.RulesStyle; Layout();
         }
 
@@ -190,7 +193,7 @@ namespace Manaforge.Play
             string safe=EscapeStat(value);
             if(!long.TryParse(value,System.Globalization.NumberStyles.Integer,System.Globalization.CultureInfo.InvariantCulture,out var current)
                 || !long.TryParse(baseline,System.Globalization.NumberStyles.Integer,System.Globalization.CultureInfo.InvariantCulture,out var original) || current==original)return safe;
-            return "<color="+(current>original?"#166534":"#FFA34D")+">"+safe+"</color>";
+            return "<color="+(current>original?"#166534":"#B91C1C")+">"+safe+"</color>";
         }
 
         public void InspectRoomDoor(int index)
@@ -221,6 +224,12 @@ namespace Manaforge.Play
         {
             if(liveMarkers.parent==null)Add(liveMarkers);
             liveMarkers.text=concealed?"":text??"";liveMarkers.style.display=string.IsNullOrEmpty(liveMarkers.text)?DisplayStyle.None:DisplayStyle.Flex;
+            liveMarkers.style.color=new Color(1,.32f,.32f);liveMarkers.style.backgroundColor=new Color(.025f,.035f,.05f,.96f);liveMarkers.style.unityFontStyleAndWeight=FontStyle.Bold;
+        }
+        public void SetCounters(string text)
+        {
+            text=concealed?"":text??"";if(counterBox.text==text)return;
+            counterBox.text=text;counterBox.tooltip=text;Layout();
         }
         public void SetSelected(bool value){bool next=!concealed && value;if(selected==next)return;selected=next;Layout();}
 
@@ -330,6 +339,7 @@ namespace Manaforge.Play
             Box(statplate,landscape?83:75,landscape?79:full?90:79,landscape?14:22,landscape?12:full?8:19);
             Box(stats,landscape?85:77,landscape?79.5f:full?90.3f:79.5f,landscape?10:18,landscape?11:full?7:17);
             Box(status,8,full?94:82,60,full?4:12);Box(missing,8,35,84,25);
+            Box(counterBox,full?8:4,full?88:64,full?64:92,full?6:14);counterBox.style.fontSize=Mathf.Max(9,12*scale);counterBox.style.display=!concealed && !originalPrinting && !string.IsNullOrEmpty(counterBox.text)?DisplayStyle.Flex:DisplayStyle.None;
             Box(miniKind,8,91,65,8);miniKind.style.fontSize=12*scale;miniKind.style.display=DisplayStyle.None;
             Box(loyaltyCounter,39,full?88:79,22,full?10:20);loyaltyCounter.Resize(28*scale);
             loyaltyCounter.style.display=!concealed && !ability && !imageFallback && !string.IsNullOrEmpty(loyaltyCounter.Value)?DisplayStyle.Flex:DisplayStyle.None;
@@ -373,6 +383,7 @@ namespace Manaforge.Play
             originalPrinting=false;showingBack=false;cardBack.ClearBinding();
             ViewRevision++;concealed = true;
             selected = false;liveMarkers.text="";liveMarkers.style.display=DisplayStyle.None;RemoveFromClassList("selected");RemoveFromClassList("attacking");RemoveFromClassList("blocking");
+            counterBox.text="";counterBox.tooltip=null;counterBox.style.display=DisplayStyle.None;
             Identity = null;
             artwork.image = null;secondArt.image=null; frame.image = null;printingFooter.image=null;compactProfile=null;miniKind.text="";loyaltyCounter.SetValue(null); mana.Conceal(); rulesSymbols.Conceal();
             stats.enableRichText=false;

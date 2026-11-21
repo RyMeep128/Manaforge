@@ -245,6 +245,14 @@ public final class ManaforgeOpeningProjection {
     }
     /** Native legal declarations/targets for either 1v1 seat; no client-side rules. */
     public synchronized JsonObject projectCoreCombat(JsonObject raw,JsonObject prompt) throws IOException {return projectCoreCombat(raw,prompt,false);}
+    /** Full seat-private board update while this seat has no native decision. */
+    public synchronized JsonObject projectCoreObservation(JsonObject raw) throws IOException {
+        JsonObject waiting=new JsonObject();waiting.addProperty("kind","GAME_ASK");waiting.addProperty("is_priority",false);
+        waiting.addProperty("decision_id",0);waiting.addProperty("message","Waiting for the other player");waiting.add("cycle",raw.get("cycle"));
+        JsonObject snapshot=projectCoreCombat(raw,waiting);
+        snapshot.add("decision",JsonNull.INSTANCE);snapshot.add("actions",new JsonArray());snapshot.addProperty("actions_complete",false);
+        invalidateDecision();return snapshot;
+    }
     public synchronized JsonObject projectCoreCombat(JsonObject raw,JsonObject prompt,boolean spells) throws IOException {
         coreCombat=true;
         try {
@@ -347,16 +355,19 @@ public final class ManaforgeOpeningProjection {
                     String commanderSource=stackRows.contains(row) && row.has("commander_source")?row.get("commander_source").getAsString():row.get("id").getAsString();if(commanderNativeIds.contains(commanderSource))card.commander_id=commanderReferences.get(commanderSource);
                     CardCharacteristics c=new CardCharacteristics();c.name=text(row,"name");c.power=text(row,"power");c.toughness=text(row,"toughness");c.base_power=text(row,"base_power");c.base_toughness=text(row,"base_toughness");
                     c.type_line=text(row,"type");c.color=text(row,"color");c.mana_cost=text(row,"mana_cost");c.casting_cost=text(row,"casting_cost");c.transformed=flag(row,"transformed");
-                    if(coreCombat){c.loyalty=text(row,"loyalty");c.defense=text(row,"defense");if(row.has("counters"))c.counters=counters(row);}
+                    if(coreCombat){c.loyalty=text(row,"loyalty");c.defense=text(row,"defense");c.is_copy=flag(row,"copy");c.flipped=flag(row,"flipped");if(row.has("counters"))c.counters=counters(row);}
                     if(row.has("view_rules") && row.get("view_rules").isJsonArray()) {
                         List<String> lines=new ArrayList<>();for(JsonElement line:row.getAsJsonArray("view_rules")) {
                             JsonObject value=new JsonObject();value.add("text",line);lines.add(text(value,"text"));
                         }c.engine_view_text=lines.toArray(new String[0]);
                     }
-                    c.unsupported_fields=coreCombat && row.has("loyalty") && row.has("defense")?row.has("counters")?new String[]{"current_abilities","transformed","is_copy","flipped"}:new String[]{"current_abilities","counters","transformed","is_copy","flipped"}:new String[]{"current_abilities","counters","loyalty","defense","transformed","is_copy","flipped"};if(c.transformed!=null)c.unsupported_fields=Arrays.stream(c.unsupported_fields).filter(field->!field.equals("transformed")).toArray(String[]::new);card.characteristics=c;
+                    c.unsupported_fields=coreCombat && row.has("loyalty") && row.has("defense")?row.has("counters")?new String[]{"current_abilities","transformed","is_copy","flipped"}:new String[]{"current_abilities","counters","transformed","is_copy","flipped"}:new String[]{"current_abilities","counters","loyalty","defense","transformed","is_copy","flipped"};if(c.transformed!=null)c.unsupported_fields=Arrays.stream(c.unsupported_fields).filter(field->!field.equals("transformed")).toArray(String[]::new);if(c.is_copy!=null)c.unsupported_fields=Arrays.stream(c.unsupported_fields).filter(field->!field.equals("is_copy")).toArray(String[]::new);if(c.flipped!=null)c.unsupported_fields=Arrays.stream(c.unsupported_fields).filter(field->!field.equals("flipped")).toArray(String[]::new);card.characteristics=c;
                     // Only this already-visible row may acquire a public artwork identity.
-                    CardIdentity binding=printings.get((viewer.equals(card.owner_id)?"":"opponent/")+text(row,"set")+"/"+text(row,"number"));
-                    if(binding==null && !Boolean.TRUE.equals(flag(row,"token")))binding=NativeGameLaunch.observationArtwork(row);
+                    JsonObject artworkRow=row;
+                    if(row.has("physical_set") && row.has("physical_number")){artworkRow=row.deepCopy();artworkRow.add("set",row.get("physical_set"));artworkRow.add("number",row.get("physical_number"));if(row.has("physical_name"))artworkRow.add("name",row.get("physical_name"));}
+                    else if(row.has("art_name")){artworkRow=row.deepCopy();artworkRow.add("name",row.get("art_name"));}
+                    CardIdentity binding=printings.get((viewer.equals(card.owner_id)?"":"opponent/")+text(artworkRow,"set")+"/"+text(artworkRow,"number"));
+                    if(binding==null && !Boolean.TRUE.equals(flag(row,"token")))binding=NativeGameLaunch.observationArtwork(artworkRow);
                     if(Boolean.TRUE.equals(flag(row,"token")))binding=NativeGameLaunch.tokenArtwork(row);
                     if(binding!=null){card.card_identity=JSON.fromJson(JSON.toJson(binding),CardIdentity.class);if(!viewer.equals(card.owner_id))card.card_identity.deck_entry_id=null;}
                 } else card.hidden=true;
@@ -543,6 +554,8 @@ public final class ManaforgeOpeningProjection {
                 if(!relationship.complete)for(TargetReference target:targets)target.ordinal=null;relationship.targets=targets.toArray(new TargetReference[0]);relationships.add(relationship);
             }result.stack_targets=relationships.toArray(new StackTargets[0]);
             result.observations=observedCards.values().toArray(new CardObservation[0]);result.payment_reason=text(raw,"payment_reason");
+            if(coreCombat && raw.has("priority_hints"))result.priority_hints=JSON.fromJson(raw.get("priority_hints"),String[].class);
+            if(coreCombat)result.priority_object_id=visibleReferences.get(text(raw,"priority_object"));
             result.unsupported_fields=new String[]{"object_incarnations","commander_metadata","live_abilities","actions","mana","counters","eliminated","attachments","copy_metadata","physical_printing"};
             if(coreCombat && cards.stream().anyMatch(card->"stack".equals(card.zone) && (card.controller_id==null || card.owner_id==null))){List<String> unsupported=new ArrayList<>(Arrays.asList(result.unsupported_fields));unsupported.add("stack_ownership");result.unsupported_fields=unsupported.toArray(new String[0]);}
             if(missingCombatant){List<String> unsupported=new ArrayList<>(Arrays.asList(result.unsupported_fields));unsupported.add("combat_lki");result.unsupported_fields=unsupported.toArray(new String[0]);}

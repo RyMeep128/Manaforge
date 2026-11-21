@@ -16,9 +16,9 @@ namespace Manaforge.Play
             if(completed || frame!=null && (frame.Status!="active" || frame.Result!=null))return new YieldPresentation(YieldPresentationMode.Normal);
             if(settings.Paused)return new YieldPresentation(YieldPresentationMode.Failed,"Automatic passing paused. Check the current decision or resume automatic passing.");
             if(settings.Yield==null)return new YieldPresentation(YieldPresentationMode.Normal);
-            if(controlsOpen || settings.Manual || frame!=null && (settings.Stops.Contains("step:"+frame.Step) || settings.Stops.Contains("phase:"+frame.Phase)))return new YieldPresentation(YieldPresentationMode.Stopped);
+            if(controlsOpen || settings.Manual || settings.TemporaryFullControl || UnityPriorityPolicy.HasStop(settings,frame))return new YieldPresentation(YieldPresentationMode.Stopped);
             if(frame!=null && (frame.Decision?.IsPriority!=true || frame.Decision.Family!="selection" || frame.Decision.PlayerId!=frame.Context.ViewerId || frame.PriorityPlayerId!=frame.Context.ViewerId || !frame.Turn.HasValue || frame.ActivePlayerId==null || !UnityPriorityPolicy.Steps.Contains(frame.Step) || frame.Actions.Count(a=>a.Kind=="pass" && a.ObjectId==null)!=1))return new YieldPresentation(YieldPresentationMode.RequiredInput);
-            return new YieldPresentation(YieldPresentationMode.Yielding,settings.Yield=="resolve-stack"?"Resolving stack…":settings.Yield=="end-turn"?"Ending your turn...":settings.Yield=="turn"?"Passing to your turn...":"Yielding until the stack changes...");
+            return new YieldPresentation(YieldPresentationMode.Yielding,settings.Yield=="response"?"Passing until response…":settings.Yield=="resolve-stack"?"Resolving stack…":settings.Yield=="end-turn"?"Ending your turn...":settings.Yield=="turn"?"Passing to your turn...":"Yielding until the stack changes...");
         }
     }
 }

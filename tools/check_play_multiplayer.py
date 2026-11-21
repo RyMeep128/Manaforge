@@ -21,6 +21,27 @@ from mtg_core.decks import Deck, DeckDocument, DeckEntry
 from check_play_unity_game import public_deck, public_commander_deck
 
 
+class AcceptanceLaunch(LiveGameLaunch):
+    """Retain bounded public-fixture diagnostics before normal owned cleanup."""
+    def __init__(self, destination):
+        super().__init__()
+        self.destination = Path(destination)
+
+    def close(self):
+        if self.owner is not None:
+            self.owner.close()
+        if self.root is not None and self.root.is_dir():
+            self.destination.mkdir(parents=True, exist_ok=True)
+            for name in ("game-error.json", "game-closed.json", "player.log", "seat-0/game-error.json", "seat-0/game-closed.json", "seat-0/player.log"):
+                path = self.root / name
+                if path.is_file() and not path.is_symlink():
+                    with path.open("rb") as stream:
+                        stream.seek(0, 2)
+                        stream.seek(max(0, stream.tell() - 4 * 1024 * 1024))
+                        (self.destination / name.replace("/", "-")).write_bytes(stream.read(4 * 1024 * 1024))
+        super().close()
+
+
 class Acceptance(C.QObject):
     prepare = C.pyqtSignal(object, int)
     finished = C.pyqtSignal(str, object)
@@ -69,12 +90,12 @@ class Acceptance(C.QObject):
             host = public_deck(False)
             guest = DeckDocument(deck=Deck(name="Public relay defender", entries=[DeckEntry("forest", "Forest", 60, set_code="TRK", collector_number="325")]))
         setup = GameSetup((MatchSeat("one", "Host"), MatchSeat("two", "Guest")), format=format)
-        return run_host_game(setup, {"one": host, "two": guest}, self.cancel, lambda _: None, version=APP_VERSION, launch=LiveGameLaunch(), remote_prepare=self.prepare.emit, remote_finished=self.guest_finished, xmage_root=Path(self.options.xmage_root), jdk_path=Path(self.options.jdk_path), acceptance=True)
+        return run_host_game(setup, {"one": host, "two": guest}, self.cancel, lambda _: None, version=APP_VERSION, launch=AcceptanceLaunch(str(self.options.output) + ".host"), remote_prepare=self.prepare.emit, remote_finished=self.guest_finished, xmage_root=Path(self.options.xmage_root), jdk_path=Path(self.options.jdk_path), acceptance=True)
 
     def guest_game(self, payload, port):
         # Separate client process/data directory preserves the real component ownership lock.
         with tempfile.TemporaryDirectory(prefix="manaforge-public-guest-") as data:
-            child = subprocess.Popen([sys.executable, __file__, "--guest", str(port)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env={**os.environ, "PRINT_PROXY_PREP_DATA_DIR": data}, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            child = subprocess.Popen([sys.executable, __file__, "--guest", str(port)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env={**os.environ, "PRINT_PROXY_PREP_DATA_DIR": data, "MANAFORGE_ACCEPTANCE_DIAGNOSTICS": str(self.options.output) + ".guest"}, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
             try:
                 raw = json.dumps(payload).encode(); child.stdin.write(len(raw).to_bytes(4, "big") + raw); child.stdin.flush()
                 while child.poll() is None:
@@ -109,7 +130,7 @@ def main():
             while stream.read(1): pass
             cancel.set()
         threading.Thread(target=lifeline, daemon=True).start()
-        result = run_guest_game(payload, int(sys.argv[-1]), cancel, lambda _: None, launch=LiveGameLaunch(), acceptance=True)
+        result = run_guest_game(payload, int(sys.argv[-1]), cancel, lambda _: None, launch=AcceptanceLaunch(os.environ["MANAFORGE_ACCEPTANCE_DIAGNOSTICS"]), acceptance=True)
         print(json.dumps(result)); return 0
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--relay", required=True)

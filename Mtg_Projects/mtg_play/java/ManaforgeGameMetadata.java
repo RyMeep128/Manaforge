@@ -17,6 +17,46 @@ import org.jboss.remoting.transport.Connector;
  */
 public final class ManaforgeGameMetadata {
     private static final Map<UUID,Object[]> recoveryIdle=new HashMap<>();
+    // Presentation facts only, read under the same native pause/cycle as the offer.
+    // This never asks canActivate(), simulates a response, or changes the game.
+    static JsonArray priorityHints(Game game,UUID viewer,GameView view,Set<UUID> identified) {
+        Set<String> hints=new LinkedHashSet<>();
+        mage.game.stack.StackObject top=game.getStack().getFirstOrNull();
+        boolean own=top!=null && viewer.equals(top.getControllerId());
+        if(own)hints.add("own_stack");
+        if(own && identified.contains(top.getId())){
+            mage.abilities.Ability ability=top.getStackAbility();
+            if(ability!=null && ability.isTriggeredAbility()){
+                String rule=ability.getRule("{this}").toLowerCase(Locale.ROOT);
+                for(mage.abilities.effects.Effect effect:ability.getAllEffects()){
+                    String kind=effect.getClass().getSimpleName();
+                    if(kind.contains("SacrificeSource") || kind.contains("ExileSource") || kind.contains("ReturnToHandSource"))hints.add("self_leaves");
+                    if(kind.startsWith("Untap"))hints.add("untap_resources");
+                }
+                if(rule.contains("sacrifice {this}") || rule.contains("sacrifice it") || rule.contains("exile {this}"))hints.add("self_leaves");
+                if(rule.contains("untap") && !rule.contains("doesn't untap") && !rule.contains("don't untap"))hints.add("untap_resources");
+                mage.game.permanent.Permanent source=game.getPermanent(top.getSourceId());
+                if(source!=null)for(mage.abilities.Ability nativeAbility:source.getAbilities(game))
+                    if(nativeAbility instanceof mage.abilities.common.SagaAbility && mage.abilities.common.SagaAbility.isFinalAbility(ability,((mage.abilities.common.SagaAbility)nativeAbility).getMaxChapter().getNumber()))hints.add("final_saga");
+            }
+            if(top instanceof mage.game.stack.Spell && (top.getCardType(game).contains(mage.constants.CardType.INSTANT) || top.getCardType(game).contains(mage.constants.CardType.SORCERY)))
+                for(CardView visible:view.getMyHand().values())if(identified.contains(visible.getId())){
+                    mage.cards.Card card=game.getCard(visible.getId());if(card==null)continue;
+                    for(mage.abilities.Ability abilityInHand:card.getAbilities()){
+                        String rule=abilityInHand.getRule("{this}").toLowerCase(Locale.ROOT);
+                        if(rule.contains("copy target") && (rule.contains("instant") || rule.contains("sorcery")))hints.add("copy_spell");
+                    }
+                }
+        }
+        for(PlayerView seat:view.getPlayers())if(!viewer.equals(seat.getPlayerId()))for(CardView visible:seat.getBattlefield().values())if(identified.contains(visible.getId())){
+            mage.game.permanent.Permanent permanent=game.getPermanent(visible.getId());if(permanent==null)continue;
+            for(mage.abilities.Ability ability:permanent.getAbilities(game))if(ability.isTriggeredAbility()){
+                String rule=ability.getRule("{this}").toLowerCase(Locale.ROOT);
+                if(rule.contains("draw") && (rule.contains("opponent") || rule.contains("player")) && (rule.contains("damage") || rule.contains("lose") && rule.contains("life")))hints.add("draw_hazard");
+            }
+        }
+        JsonArray result=new JsonArray();for(String hint:hints)result.add(hint);return result;
+    }
     /** Trusted stdin lifecycle control, separate from the read-only viewer metadata endpoint. */
     public static synchronized JsonObject recovery(JsonObject command) throws Exception {
         UUID gameId=UUID.fromString(command.get("game").getAsString());String action=command.get("action").getAsString();
@@ -204,6 +244,7 @@ public final class ManaforgeGameMetadata {
                     UUID owner = source == null ? null : source.getOwnerId();
                     UUID control = permanent != null ? permanent.getControllerId() : stacked == null ? null : stacked.getControllerId();
                     if (stacked != null && stacked.getSourceId() != null) metadata.addProperty("source", stacked.getSourceId().toString());
+                    if(stacked instanceof mage.game.stack.StackAbility)metadata.addProperty("stack_ability",true);
                     if (identified.contains(id)) {
                         if(castingCosts.containsKey(id))metadata.addProperty("casting_cost",castingCosts.get(id));
                         // An ability borrows artwork only from a source whose identity
@@ -212,6 +253,7 @@ public final class ManaforgeGameMetadata {
                                 && publicArtworkSources.contains(source.getId())){
                             metadata.addProperty("ability_art_set",source.getExpansionSetCode());
                             metadata.addProperty("ability_art_number",source.getCardNumber());
+                            metadata.addProperty("ability_art_name",source.getName());
                         }
                         if(stacked instanceof mage.game.stack.Spell && source!=null) {
                             metadata.addProperty("source_incarnation",state.getZoneChangeCounter(stacked.getSourceId()));
@@ -240,6 +282,7 @@ public final class ManaforgeGameMetadata {
                         metadata.addProperty("main_card",original.getId().toString());metadata.addProperty("main_card_incarnation",state.getZoneChangeCounter(original.getId()));
                         metadata.addProperty("physical_set", original.getExpansionSetCode());
                         metadata.addProperty("physical_number", original.getCardNumber());
+                        metadata.addProperty("physical_name", original.getName());
                     }
                     if (owner != null) metadata.addProperty("owner", owner.toString());
                     if (control != null) metadata.addProperty("controller", control.toString());
@@ -263,6 +306,9 @@ public final class ManaforgeGameMetadata {
                         && "priority".equals(responseMethod);
                 JsonObject result = status("ok"); result.addProperty("cycle", cycle);
                 result.addProperty("priority_open", priorityOpen);
+                try{result.add("priority_hints",priorityHints(game,playerId,permitted,publicArtworkSources));}
+                catch(RuntimeException unsupported){result.add("priority_hints",JsonNull.INSTANCE);}
+                if(!game.getStack().isEmpty())result.addProperty("priority_object",game.getStack().getFirst().getId().toString());
                 // Match the pinned HumanPlayer selection branches under the same response monitor.
                 // Native requirement effects still decide whether an attacker click can remove it.
                 String declaration="selectAttackers".equals(responseMethod)?"attackers":"selectBlockers".equals(responseMethod)?"blockers":null;

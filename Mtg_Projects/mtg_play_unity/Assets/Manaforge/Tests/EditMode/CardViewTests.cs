@@ -33,13 +33,13 @@ namespace Manaforge.Play.Tests
         [Test] public void StatsColorIndependentlyAndResetAtBase()
         {
             view.UpdateValues(new CardDisplayValues("Creature",null,"Creature",null,"4/1",null,basePower:"2",baseToughness:"2"));
-            Assert.That(view.Q<Label>("stats").text,Is.EqualTo("<color=#166534>4</color>/<color=#FFA34D>1</color>"));
+            Assert.That(view.Q<Label>("stats").text,Is.EqualTo("<color=#166534>4</color>/<color=#B91C1C>1</color>"));
             view.UpdateValues(new CardDisplayValues("Creature",null,"Creature",null,"2/2",null,basePower:"2",baseToughness:"2"));
             Assert.That(view.Q<Label>("stats").text,Is.EqualTo("2/2"));
         }
         [TestCase("4/4",null,null,"4/4")]
         [TestCase("*/3","*","3","*/3")]
-        [TestCase("-1/0","2","2","<color=#FFA34D>-1</color>/<color=#FFA34D>0</color>")]
+        [TestCase("-1/0","2","2","<color=#B91C1C>-1</color>/<color=#B91C1C>0</color>")]
         public void UnknownSymbolicAndNegativeStats(string value,string power,string toughness,string expected)
         {Assert.That(CardView.ColoredStats(value,power,toughness),Is.EqualTo(expected));}
         [TestCase("4",3L,"1")][TestCase("2",0L,"2")][TestCase("*",2L,"*")][TestCase("2",5L,"-3")]

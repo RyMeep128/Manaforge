@@ -5,6 +5,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 /** Engine-free public fixture over real authenticated sockets and production admission. */
 public final class OpeningSessionChecks {
     static void concessionAdmissionChecks(manaforge.protocol.GatewayHandshake.ViewerContext context) throws Exception {
+        pendingConcessionAdmissionChecks(context);
         ManaforgeOpeningProjection projection=OpeningProjectionChecks.projection();JsonObject before=OpeningProjectionChecks.attackState();before.addProperty("priority_player","raw-name");JsonObject snapshot=projection.projectCoreCombat(before,OpeningProjectionChecks.priorityPrompt());
         snapshot.add("decision",JsonNull.INSTANCE);snapshot.add("actions",new JsonArray());
         JsonObject body=new JsonObject();body.addProperty("session_id","session");body.addProperty("viewer_id","human");body.add("revision",snapshot.get("revision"));body.addProperty("operation","concede");
@@ -21,6 +22,19 @@ public final class OpeningSessionChecks {
             accepted.addProperty("request_id","wrong");if(NativeCastCorrelation.concessionEvidence(before,command,accepted,terminal,callback)!=null)throw new AssertionError("CONCESSION_UNCORRELATED_ACK");
             accepted.add("request_id",command.get("request_id"));callback.addProperty("won",true);if(NativeCastCorrelation.concessionEvidence(before,command,accepted,terminal,callback)!=null)throw new AssertionError("CONCESSION_INFERRED_LOSS");
             if(owner.dispatch(wire.toString(),"raw-game","raw-human",41,8).shouldSubmit || owner.pollNative()!=null)throw new AssertionError("CONCESSION_CONFIRMED_REPLAYED");
+        }
+    }
+    static void pendingConcessionAdmissionChecks(manaforge.protocol.GatewayHandshake.ViewerContext context) throws Exception {
+        ManaforgeOpeningProjection projection=OpeningProjectionChecks.projection();JsonObject before=OpeningProjectionChecks.attackState();before.addProperty("priority_player","raw-name");
+        JsonObject interactive=projection.projectCoreCombat(before,OpeningProjectionChecks.priorityPrompt());
+        try(ManaforgeOpeningSession owner=new ManaforgeOpeningSession(context,projection,envelope(interactive).toString())){
+            String pending=OpeningProjectionChecks.perform(interactive);
+            if(!owner.dispatch(pending,"raw-game","raw-human",41,8).shouldSubmit || owner.pollNative()==null)throw new AssertionError("PENDING_PRIORITY_MISSING");
+            JsonObject waiting=projection.projectCoreObservation(before);owner.observe(envelope(waiting).toString());
+            JsonObject request=JsonParser.parseString(pending).getAsJsonObject();request.addProperty("message_id","interrupt-concession");JsonObject body=request.getAsJsonObject("body");body.remove("decision_id");body.remove("action_id");body.addProperty("operation","concede");body.add("revision",waiting.get("revision"));
+            if(!owner.dispatch(request.toString(),"raw-game","raw-human",0,8).shouldSubmit)throw new AssertionError("CONCESSION_BLOCKED_BY_PRIORITY_RECEIPT");
+            JsonObject command=owner.pollNative();if(command==null || !"concede".equals(command.get("command").getAsString()))throw new AssertionError("CONCESSION_NOT_QUEUED");
+            if(owner.dispatch(request.toString(),"raw-game","raw-human",0,8).shouldSubmit || owner.pollNative()!=null)throw new AssertionError("CONCESSION_INTERRUPTION_REPLAYED");
         }
     }
     static void numericAdmissionChecks(manaforge.protocol.GatewayHandshake.ViewerContext context) throws Exception {

@@ -85,6 +85,11 @@ public final class NativePaymentHazards {
                 // cannot add a cost to the zero-mana, tap-only source candidates
                 // that ordinaryPayment separately verifies. Increases and sets can.
                 if(!simulation && ((mage.abilities.effects.CostModificationEffect)effect).getModificationType()!=mage.constants.CostModificationType.REDUCE_COST)return "MANA_COST_MODIFIER";
+            }else if(simulation && effect.getClass()==mage.abilities.effects.common.continuous.PlayAdditionalLandsControllerEffect.class){
+                // This native effect only changes the controller's land-play allowance.
+                // It cannot affect a mana activation or payment. Keep other player
+                // effects (and subclasses with additional behavior) guarded.
+                continue;
             }else if(simulation && nativeLegalityEffect(effect)){
                 // Restrictions include combat keywords such as flying, but also
                 // real activation prohibitions. Do not evaluate or bypass them

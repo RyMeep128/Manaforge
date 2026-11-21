@@ -142,6 +142,7 @@ public final class NativePaymentAcceptanceChecks {
             if(name.startsWith("artifact-null-rod"))engine.load(new mage.cards.n.NullRod(engine.opponent.getId(),info("Null Rod")),Zone.BATTLEFIELD);
             if(name.equals("cost-reducer"))engine.load(new mage.cards.h.HelmOfAwakening(engine.payer.getId(),info("Helm of Awakening")),Zone.BATTLEFIELD);
             if(name.equals("cost-increase"))engine.load(new mage.cards.s.SphereOfResistance(engine.opponent.getId(),info("Sphere of Resistance")),Zone.BATTLEFIELD);
+            if(name.startsWith("exploration-"))engine.load(new mage.cards.e.Exploration(name.equals("exploration-opponent")?engine.opponent.getId():engine.payer.getId(),info("Exploration")),Zone.BATTLEFIELD);
             if(doubler)engine.load(new mage.cards.m.ManaFlare(engine.opponent.getId(),info("Mana Flare")),Zone.BATTLEFIELD);
             if(name.equals("manabarbs"))engine.load(new mage.cards.m.Manabarbs(engine.opponent.getId(),info("Manabarbs")),Zone.BATTLEFIELD);
             if(name.equals("denizen")){
@@ -152,7 +153,16 @@ public final class NativePaymentAcceptanceChecks {
             for(int i=0;i<24;i++)engine.load(new mage.cards.basiclands.Forest(engine.payer.getId(),info("Forest")),Zone.LIBRARY);
             Card spell=name.equals("affinity-enforcer")?new mage.cards.m.MyrEnforcer(engine.payer.getId(),info("Myr Enforcer")):name.equals("affinity-thoughtcast")?new mage.cards.t.Thoughtcast(engine.payer.getId(),info("Thoughtcast")):name.equals("affinity-zero")?new mage.cards.f.Frogmite(engine.payer.getId(),info("Frogmite")):name.equals("denizen")?new mage.cards.f.FoundryStreetDenizen(engine.payer.getId(),info("Foundry Street Denizen")):new Probe(engine.payer.getId(),cost);
             ActivatedAbility activation=null;
-            if(ability){activation=new mage.abilities.common.SimpleActivatedAbility(Zone.BATTLEFIELD,new mage.abilities.effects.common.GainLifeEffect(1),new ManaCostsImpl<>(cost));if(name.equals("nonstack-activation"))activation=new ImmediateAbility(cost);spell.addAbility(activation);engine.load(spell,Zone.BATTLEFIELD);activation=(ActivatedAbility)engine.game.getPermanent(spell.getId()).getAbilities().get(engine.game.getPermanent(spell.getId()).getAbilities().size()-1);}
+            if(ability){
+                activation=new mage.abilities.common.SimpleActivatedAbility(Zone.BATTLEFIELD,new mage.abilities.effects.common.GainLifeEffect(1),new ManaCostsImpl<>(cost));
+                if(name.startsWith("reserved-tap")){
+                    spell.addAbility(new mage.abilities.mana.ColorlessManaAbility());
+                    activation.addCost(new mage.abilities.costs.common.TapSourceCost());
+                }
+                if(name.equals("nonstack-activation"))activation=new ImmediateAbility(cost);
+                spell.addAbility(activation);engine.load(spell,Zone.BATTLEFIELD);
+                activation=(ActivatedAbility)engine.game.getPermanent(spell.getId()).getAbilities().get(engine.game.getPermanent(spell.getId()).getAbilities().size()-1);
+            }
             else engine.load(spell,Zone.HAND);
             Map<UUID,Boolean> initialTaps=new HashMap<>();Map<UUID,mage.counters.Counters> initialCounters=new HashMap<>();
             for(Card source:lands){initialTaps.put(source.getId(),engine.game.getPermanent(source.getId()).isTapped());initialCounters.put(source.getId(),engine.game.getPermanent(source.getId()).getCounters(engine.game).copy());}
@@ -171,6 +181,7 @@ public final class NativePaymentAcceptanceChecks {
                 if(manual){check("GAME_PLAY_MANA".equals(next.prompt.get("kind").getAsString()),name+"_DID_NOT_REQUEST_MANUAL");check(!engine.paid.get(),name+"_PAID_UNSAFE");check(engine.payer.getLife()==initialLife,name+"_LOST_LIFE");for(Card source:lands){check(engine.game.getPermanent(source.getId()).isTapped()==initialTaps.get(source.getId()),name+"_PARTIAL_TAP");check(engine.game.getPermanent(source.getId()).getCounters(engine.game).equals(initialCounters.get(source.getId())),name+"_REMOVED_COUNTER");}}
                 else {
                     check(engine.paid.get(),name+"_AUTO_FALLBACK_"+payment.reason());check("GAME_ASK".equals(next.prompt.get("kind").getAsString()),name+"_PAYMENT_NOT_FINISHED");
+                    if(name.startsWith("reserved-tap"))check(engine.game.getPermanent(spell.getId()).isTapped(),"ACTIVATION_TAP_COST_NOT_PAID");
                     check(payment.report().get("native_auto_payment_manual_windows").getAsInt()==0,name+"_MANUAL_INPUT");check(payment.report().get("native_auto_payment_completed").getAsInt()==(name.equals("affinity-zero")?0:1),name+"_COMPLETION_UNPROVEN");
                     int taps=0;for(Card source:lands)if(engine.game.getPermanent(source.getId()).isTapped())taps++;
                     if(name.equals("denizen"))check(taps==1,"DENIZEN_MUST_LEAVE_ONE_MOUNTAIN");if(name.equals("double-red"))check(taps==2,"DOUBLE_RED_NEEDS_BOTH");if(doubler)check(taps==1,"DOUBLER_USED_EXTRA_SOURCE");
@@ -185,6 +196,7 @@ public final class NativePaymentAcceptanceChecks {
                     if(name.startsWith("generated-"))check(taps==2,"GENERATED_NONMINIMAL_TAPS");
                     if(!ability)check(engine.game.getStack().size()==1 && engine.game.getStack().getFirst().getSourceId().equals(spell.getId()),name+"_SPELL_NOT_STACKED");
                 }
+                if(manual && name.startsWith("reserved-tap"))check(!engine.game.getPermanent(spell.getId()).isTapped(),"RESERVED_SOURCE_TAPPED_DURING_MANUAL_FALLBACK");
                 if(engine.lastCommand!=null) {
                     int sent=engine.nativeSourceResponses;engine.bridge.execute(engine.lastCommand);
                     check(engine.nativeSourceResponses==sent,"BRIDGE_REPLAYED_PAYMENT");
@@ -290,6 +302,9 @@ public final class NativePaymentAcceptanceChecks {
         scenario("snow","{S}",new String[]{"mage.cards.s.SnowCoveredMountain"},false,false,false,false);
         scenario("wrong-snow-source","{S}",new String[]{mountain},true,false,false,false);
         scenario("rock-colorless","{C}",new String[]{"mage.cards.s.SolRing"},false,false,false,false);
+        String[] mixedWithRing={forest,mountain,"mage.cards.basiclands.Swamp","mage.cards.s.SolRing"};
+        scenario("exploration-controller","{1}{B}{R}{G}",mixedWithRing,false,false,false,false);
+        scenario("exploration-opponent","{1}{B}{R}{G}",mixedWithRing,false,false,false,false);
         scenario("sick-mana-creature","{G}",new String[]{"mage.cards.l.LlanowarElves"},true,false,false,false);
         scenario("tapped-source","{R}",new String[]{mountain},true,false,false,false);
         scenario("mana-creature","{G}",new String[]{"mage.cards.l.LlanowarElves"},false,false,false,false);
@@ -299,6 +314,8 @@ public final class NativePaymentAcceptanceChecks {
         scenario("dualland","{U}",new String[]{"mage.cards.t.TropicalIsland"},false,false,false,false);
         scenario("mana-doubler","{R}{R}",new String[]{mountain},false,false,false,true);
         scenario("activation","{1}{U}",new String[]{mountain,island},false,true,false,false);
+        scenario("reserved-tap-alternative","{1}",new String[]{forest},false,true,false,false);
+        scenario("reserved-tap-only-source","{1}",new String[]{},true,true,false,false);
         scenario("nonstack-activation","{R}",new String[]{mountain},false,true,false,false);
         scenario("stale-before-submit","{R}",new String[]{mountain},false,false,false,false);
         scenario("manual-mode","{R}",new String[]{mountain},true,false,false,false);

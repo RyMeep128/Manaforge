@@ -21,7 +21,7 @@ namespace Manaforge.Play.Tests
             public Scope(Action dispose){this.dispose=dispose;}
             public void Dispose(){dispose();}
         }
-        internal static ProjectedCardFrame Frame(string viewer="one",long revision=1,bool hidden=false,string name="Viewer text",bool empty=false,string session="fixture-0001",bool artwork=false,bool? faceDownState=false,int objectCount=1,bool missingRules=false,bool emptyAbilities=false,string typeLine=null,string basePower=null,string baseToughness=null,long? damage=null,string objectId=null,string presentationId=null,string zone=null,string manaCost=null,string castingCost=null,bool? transformed=null)
+        internal static ProjectedCardFrame Frame(string viewer="one",long revision=1,bool hidden=false,string name="Viewer text",bool empty=false,string session="fixture-0001",bool artwork=false,bool? faceDownState=false,int objectCount=1,bool missingRules=false,bool emptyAbilities=false,string typeLine=null,string basePower=null,string baseToughness=null,long? damage=null,string objectId=null,string presentationId=null,string zone=null,string manaCost=null,string castingCost=null,bool? transformed=null,JArray counters=null,string defense=null)
         {
             var corpus=JObject.Parse(File.ReadAllText(Path.Combine(Application.dataPath,"../../mtg_play/protocol/fixtures/wire-receive-v1.json")));
             var message=(JObject)corpus["positive"][0]["envelope"];var snapshot=message["body"]["snapshot"];
@@ -41,6 +41,8 @@ namespace Manaforge.Play.Tests
             if(!hidden && missingRules)card["characteristics"]["engine_view_text"]=JValue.CreateNull();
             if(!hidden && emptyAbilities)card["characteristics"]["current_abilities"]=new JArray();
             if(!hidden && typeLine!=null)card["characteristics"]["type_line"]=typeLine;
+            if(!hidden && counters!=null)card["characteristics"]["counters"]=counters.DeepClone();
+            if(!hidden && defense!=null)card["characteristics"]["defense"]=defense;
             return ViewerCardProjection.ParseSnapshot(message.ToString(),session,viewer,0,true);
         }
         [UnityTest] public IEnumerator HiddenObjectsUseSharedBackAndCannotBeInspected()
@@ -192,12 +194,27 @@ namespace Manaforge.Play.Tests
             // Current 4/5, original 2/3, four marked damage: 4/1.
             Assert.That(surface.TryPresent(ticket,Frame(typeLine:"Creature",basePower:"2",baseToughness:"3",damage:4)),Is.True);
             var id=surface.PresentedObjectIds()[0];Assert.That(surface.Inspect(ticket,id),Is.True);
-            string expected="<color=#166534>4</color>/<color=#FFA34D>1</color>";
+            string expected="<color=#166534>4</color>/<color=#B91C1C>1</color>";
             Assert.That(surface.CardsRoot.Q<Label>("stats").text,Is.EqualTo(expected));
             Assert.That(surface.InspectionView.Q<Label>("stats").text,Is.EqualTo(expected));
             Assert.That(surface.TryPresent(ticket,Frame(revision:2,typeLine:"Creature",basePower:"4",baseToughness:"5",damage:0)),Is.True);
             Assert.That(surface.CardsRoot.Q<Label>("stats").text,Is.EqualTo("4/5"));
             Assert.That(surface.InspectionView.Q<Label>("stats").text,Is.EqualTo("4/5"));
+        }
+        [UnityTest] public IEnumerator QuestCountersUpdateOnTheBoardAndInspectionWithoutAnUnrelatedDefenseZero()
+        {
+            var ticket=surface.BeginViewer("fixture-0001","one");yield return null;yield return null;
+            Assert.That(surface.TryPresent(ticket,Frame(name:"Firebender Ascension",typeLine:"Enchantment",zone:"battlefield",counters:new JArray { new JArray("quest",3) },defense:"0")),Is.True);
+            var view=surface.CardsRoot.Q<CardView>();Assert.That(surface.Inspect(ticket,"fixture-0002"),Is.True);
+            Assert.That(view.Q<Label>("card-counters").text,Is.EqualTo("quest 3"));Assert.That(surface.InspectionView.Q<Label>("card-counters").text,Is.EqualTo("quest 3"));
+            Assert.That(surface.InspectionView.Q<Label>("stats").text,Is.Null.Or.Empty);
+            Assert.That(surface.TryPresent(ticket,Frame(revision:2,typeLine:"Enchantment",zone:"battlefield",counters:new JArray(new JArray("quest",4),new JArray("charge",1)),defense:"0")),Is.True);
+            yield return null;
+            var badge=surface.InspectionView.Q<Label>("card-counters");Assert.That(badge.text,Is.EqualTo("quest 4 · charge 1"));Assert.That(badge.resolvedStyle.display,Is.EqualTo(DisplayStyle.Flex));Assert.That(badge.worldBound.width,Is.GreaterThan(0));
+            Assert.That(surface.TryPresent(ticket,Frame(revision:3,typeLine:"Enchantment",zone:"battlefield",counters:new JArray())),Is.True);
+            Assert.That(badge.text,Is.Empty);Assert.That(badge.style.display.value,Is.EqualTo(DisplayStyle.None));
+            Assert.That(surface.TryPresent(ticket,Frame(revision:4,typeLine:"Battle",zone:"battlefield",defense:"5")),Is.True);Assert.That(surface.InspectionView.Q<Label>("stats").text,Is.EqualTo("5"));
+            Assert.That(surface.TryPresent(ticket,Frame(revision:5,hidden:true)),Is.True);Assert.That(surface.HasInspection,Is.False);Assert.That(badge.text,Is.Empty);Assert.That(badge.tooltip,Is.Null.Or.Empty);
         }
         [UnityTest] public IEnumerator OrdinarySnapshotsPreserveArtworkAndInspectionUntilVisibilityChanges()
         {

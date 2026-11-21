@@ -3,6 +3,7 @@ using System.Collections;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using WireMessages=Manaforge.Play.Protocol.WireMessages;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using UnityEngine;
@@ -39,7 +40,47 @@ namespace Manaforge.Play.Tests
                 Assert.That(overlay.style.display.value,Is.EqualTo(DisplayStyle.None));var reopen=root.Q<Button>("reopen-amount-assignment");Assert.That(reopen.style.display.value,Is.EqualTo(DisplayStyle.Flex));Assert.That(field.value,Is.EqualTo("2"));Assert.That(peer.PendingCommandBytes,Is.Zero);
                 Assert.That(arena.BrowsePublicZone("graveyard","one"),Is.True);yield return null;using(var submit=NavigationSubmitEvent.GetPooled()){submit.target=reopen;reopen.SendEvent(submit);}yield return null;Assert.That(root.Q<ZoneBrowser>().style.display.value,Is.EqualTo(DisplayStyle.None));Assert.That(overlay.style.display.value,Is.EqualTo(DisplayStyle.Flex));Assert.That(arena.Decisions.Root.Q<TextField>("decision-number-0"),Is.SameAs(field));Assert.That(field.value,Is.EqualTo("2"));
                 foreach(var size in new[]{new Vector2(1280,720),new Vector2(1920,1080)}){doc.rootVisualElement.style.width=size.x;doc.rootVisualElement.style.height=size.y;yield return null;yield return null;Assert.That(popup.worldBound.width,Is.LessThan(size.x));Assert.That(field.resolvedStyle.width,Is.GreaterThanOrEqualTo(80));}
+                // Trample may be followed by another required choice rather than priority.
+                // Return the live decision controls from the popup to the Actions drawer.
+                var followup=(JObject)wire.DeepClone();followup["message_id"]="after-damage";
+                var next=followup["body"]["snapshot"];next["revision"]=(long)snapshot["revision"]+1;
+                var nextChoice=next["decision"];nextChoice["decision_id"]="after-damage-choice";nextChoice["family"]="boolean";nextChoice["prompt"]="Assign excess damage to the defending player?";
+                nextChoice["minimum"]=nextChoice["maximum"]=null;nextChoice["amounts"]=new JArray();
+                nextChoice["options"]=new JArray(new JObject{["option_id"]="yes",["label"]="Yes",["object_id"]=null,["player_id"]=null,["selected"]=false},new JObject{["option_id"]="no",["label"]="No",["object_id"]=null,["player_id"]=null,["selected"]=false});
+                Frame(followup); // Validate the fixture before sending it to the live receiver.
+                peer.ReplyForFixture(followup);deadline=Time.realtimeSinceStartup+10;
+                while(host.PresentedDecision?.Frame.Context.Revision!=(long)next["revision"] && Time.realtimeSinceStartup<deadline){host.Tick();yield return null;}
+                Assert.That(host.PresentedDecision?.Frame.Context.Revision,Is.EqualTo((long)next["revision"]));
+                arena.Decisions.Tick();arena.Present(host.PresentedDecision.Frame);yield return null;yield return null;
+                Assert.That(overlay.style.display.value,Is.EqualTo(DisplayStyle.None));
+                var choices=root.Q<ScrollView>("table-choices");Assert.That(choices.Contains(arena.Decisions.Root),Is.True);
+                var yes=arena.Decisions.Root.Q<Button>("decision-option-0");Assert.That(yes,Is.Not.Null);Assert.That(yes.enabledInHierarchy,Is.True);
+                Assert.That(yes.worldBound.Overlaps(choices.contentViewport.worldBound),Is.True,"The next choice must be visible in the Actions drawer after assigning damage");
                 host.Cancel();host.Tick();yield return null;Assert.That(overlay.style.display.value,Is.EqualTo(DisplayStyle.None));
+            }finally{host.Cancel();UnityEngine.Object.Destroy(node);UnityEngine.Object.Destroy(settings);}yield return null;
+        }
+        [UnityTest] public IEnumerator MinimizedStackKeepsItsResolveControlsUsable()
+        {
+            var wire=Fixture("receive-history-v1.json");var snapshot=wire["body"]["snapshot"];snapshot["turn"]=1;snapshot["phase"]="PRECOMBAT_MAIN";snapshot["step"]="PRECOMBAT_MAIN";snapshot["active_player_id"]=snapshot["priority_player_id"]="one";
+            snapshot["objects"][0]["zone"]="stack";snapshot["decision"]["family"]="selection";snapshot["decision"]["is_priority"]=true;snapshot["decision"]["options"]=new JArray();
+            snapshot["actions"]=new JArray(new JObject{["action_id"]="resolve-current",["kind"]="pass",["object_id"]=null,["label"]="Pass priority",["priority_class"]="unknown"});
+            var doc=Document(out var node,out var settings);var root=doc.rootVisualElement;root.style.width=1280;root.style.height=720;
+            using var arena=new ArenaGameplayPresentation(root);using var peer=new ViewerSessionHostTests.Peer(wire.ToString());var owner=new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);using var host=new ViewerSessionHost(arena.Surface,peer.Bootstrap(),owner.Task,true);arena.Bind(host);
+            try{
+                float deadline=Time.realtimeSinceStartup+10;while(host.PresentedDecision==null && Time.realtimeSinceStartup<deadline){host.Tick();yield return null;}
+                Assert.That(host.PresentedDecision,Is.Not.Null);arena.Decisions.Tick();arena.Present(host.PresentedDecision.Frame);yield return null;yield return null;
+                var panel=root.Q("stack-panel");var toggle=root.Q<Button>("stack-focus-toggle");var next=root.Q<Button>("stack-resolve-next");var all=root.Q<Button>("stack-resolve-all");
+                Assert.That(panel.Contains(next),Is.True);Assert.That(panel.Contains(all),Is.True);
+                using(var click=NavigationSubmitEvent.GetPooled()){click.target=toggle;toggle.SendEvent(click);}yield return null;
+                Assert.That(root.Q("stack-cards").style.display.value,Is.EqualTo(DisplayStyle.None));Assert.That(panel.style.display.value,Is.EqualTo(DisplayStyle.Flex));Assert.That(toggle.text,Is.EqualTo("View"));
+                foreach(var size in new[]{new Vector2(1280,720),new Vector2(1920,1080)}){
+                    root.style.width=size.x;root.style.height=size.y;yield return null;yield return null;arena.Decisions.Tick();arena.Present(host.PresentedDecision.Frame);
+                    Assert.That(next.enabledInHierarchy,Is.True);Assert.That(all.enabledInHierarchy,Is.True);var picked=root.panel.Pick(next.worldBound.center);
+                    Assert.That(picked==next || next.Contains(picked),Is.True,"Collapsing the stack must leave the resolve button clickable");
+                }
+                using(var click=NavigationSubmitEvent.GetPooled()){click.target=next;next.SendEvent(click);}
+                var read=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));deadline=Time.realtimeSinceStartup+10;while(!read.IsCompleted && Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(read.IsCompleted,Is.True);Assert.That((string)read.Result["body"]["operation"],Is.EqualTo("perform"));Assert.That((string)read.Result["body"]["action_id"],Is.EqualTo("resolve-current"));Assert.That(peer.PendingCommandBytes,Is.Zero);
             }finally{host.Cancel();UnityEngine.Object.Destroy(node);UnityEngine.Object.Destroy(settings);}yield return null;
         }
         [UnityTest] public IEnumerator PassivePriorityTextSettlesWithoutBlankingOrReplayingOldUpdates()
@@ -53,13 +94,13 @@ namespace Manaforge.Play.Tests
         }
         [UnityTest] public IEnumerator PhaseStripKeepsItsButtonsAndStopsAcrossPhaseUpdates()
         {
-            var doc=Document(out var node,out var settings);var policy=new UnityPriorityPolicy();var strip=new GameplayPhaseStrip(doc.rootVisualElement,()=>policy,()=>{});
+            var doc=Document(out var node,out var settings);var policy=new UnityPriorityPolicy();policy.Current.RepeatStops=true;var strip=new GameplayPhaseStrip(doc.rootVisualElement,()=>policy,()=>{});
             try{
                 var wire=Fixture("receive-history-v1.json");var snapshot=wire["body"]["snapshot"];snapshot["phase"]="PRECOMBAT_MAIN";snapshot["step"]="PRECOMBAT_MAIN";
                 string session=(string)snapshot["session_id"],viewer=(string)snapshot["viewer_id"];
                 strip.Present(ViewerDecisionProjection.ParseSnapshot(wire.ToString(),session,viewer,0,true),policy);
                 var main=strip.Root.Q<Button>("phase-stop-PRECOMBAT_MAIN");Assert.That(main.ClassListContains("phase-active"),Is.True);
-                using(var submit=NavigationSubmitEvent.GetPooled()){submit.target=main;main.SendEvent(submit);}Assert.That(policy.Current.Stops,Does.Contain("phase:PRECOMBAT_MAIN"));
+                using(var submit=NavigationSubmitEvent.GetPooled()){submit.target=main;main.SendEvent(submit);}Assert.That(policy.Current.Stops,Does.Contain("own:phase:PRECOMBAT_MAIN"));
                 snapshot["revision"]=(long)snapshot["revision"]+1;snapshot["phase"]="COMBAT";snapshot["step"]="BEGIN_COMBAT";
                 strip.Present(ViewerDecisionProjection.ParseSnapshot(wire.ToString(),session,viewer,0,true),policy);
                 Assert.That(strip.Root.Q<Button>("phase-stop-PRECOMBAT_MAIN"),Is.SameAs(main));Assert.That(main.ClassListContains("phase-stopped"),Is.True);Assert.That(strip.Root.Q<Button>("phase-stop-COMBAT").ClassListContains("phase-active"),Is.True);
@@ -137,7 +178,7 @@ namespace Manaforge.Play.Tests
                 drawer.SetOpen(false);yield return null;Assert.That(drawer.focusController.focusedElement,Is.SameAs(drawer.Tab));
                 Assert.That(drawer.Content.style.visibility.value,Is.EqualTo(Visibility.Hidden));Assert.That(field.focusable,Is.False);
                 using(var key=KeyDownEvent.GetPooled('\0',KeyCode.RightArrow,EventModifiers.None)){key.target=drawer.Tab;drawer.Tab.SendEvent(key);}
-                for(int i=0;i<10 && drawer.focusController.focusedElement!=field && !field.Contains(drawer.focusController.focusedElement as VisualElement);i++)yield return null;
+                float focusDeadline=Time.realtimeSinceStartup+2;while(Time.realtimeSinceStartup<focusDeadline && drawer.focusController.focusedElement!=field && !field.Contains(drawer.focusController.focusedElement as VisualElement))yield return null;
                 Assert.That(drawer.IsOpen,Is.True);Assert.That(drawer.focusController.focusedElement==field || field.Contains(drawer.focusController.focusedElement as VisualElement),Is.True);
                 drawer.SetReducedMotion(false);drawer.SetOpen(false);drawer.SetOpen(true);yield return new WaitForSecondsRealtime(.3f);
                 Assert.That(drawer.Content.style.visibility.value,Is.EqualTo(Visibility.Visible),"A retired close must not hide a reopened drawer");
@@ -153,7 +194,7 @@ namespace Manaforge.Play.Tests
             using var panel=new ViewerDecisionPanel(doc.rootVisualElement,host);using var targeting=new ViewerTargetingController(doc.rootVisualElement,surface,panel,()=>hud.Players);
             try{
                 float deadline=Time.realtimeSinceStartup+10;while(host.PresentedDecision==null && Time.realtimeSinceStartup<deadline){host.Tick();yield return null;}
-                Assert.That(host.PresentedDecision,Is.Not.Null);panel.Tick();var frame=host.PresentedDecision.Frame;hud.Present(frame,surface,"freeform");hud.SetTargetable(id=>id=="two");targeting.Observe(frame);
+                Assert.That(host.PresentedDecision,Is.Not.Null);panel.Priority.Observe(host.PresentedDecision.Frame);panel.Priority.Current.Automatic=false;panel.Tick();var frame=host.PresentedDecision.Frame;hud.Present(frame,surface,"freeform");hud.SetTargetable(id=>id=="two");targeting.Observe(frame);
                 hud.PlayerActivated+=id=>panel.TryActivatePlayer(host.PresentedDecision,id);hud.Player("one").Activate();Assert.That(peer.PendingCommandBytes,Is.Zero);hud.Player("two").Activate();
                 var read=Task.Run(()=>Manaforge.Play.Protocol.WireMessages.Parse(peer.ReadCommandForFixture()));while(!read.IsCompleted && Time.realtimeSinceStartup<deadline)yield return null;
                 Assert.That(read.IsCompleted,Is.True);Assert.That((string)read.GetAwaiter().GetResult()["body"]["option_id"],Is.EqualTo("target-two"));
@@ -167,7 +208,7 @@ namespace Manaforge.Play.Tests
         }
         [UnityTest] public IEnumerator AutomaticPassingStillDispatchesExactlyOnceWithBothDrawersCollapsed()
         {
-            var envelope=Fixture("receive-history-v1.json");var snapshot=envelope["body"]["snapshot"];snapshot["phase"]="BEGINNING";snapshot["step"]="UPKEEP";snapshot["decision"]["family"]="selection";
+            var envelope=Fixture("receive-history-v1.json");var snapshot=envelope["body"]["snapshot"];snapshot["phase"]="BEGINNING";snapshot["step"]="UPKEEP";snapshot["actions_complete"]=true;snapshot["decision"]["family"]="selection";
             snapshot["actions"]=new JArray(new JObject{["action_id"]="pass-offered",["kind"]="pass",["label"]="Pass",["object_id"]=null,["priority_class"]="unknown"});
             var doc=Document(out var node,out var settings);using var surface=new ViewerCardSurface(doc.rootVisualElement);
             using var peer=new ViewerSessionHostTests.Peer(envelope.ToString());var owner=new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);using var host=new ViewerSessionHost(surface,peer.Bootstrap(),owner.Task,true);
@@ -205,7 +246,7 @@ namespace Manaforge.Play.Tests
         }
         [UnityTest] public IEnumerator MandatoryChoiceReopensOnceAndCollapsedPriorityRetainsPreferences()
         {
-            var envelope=Fixture("receive-history-v1.json");var snapshot=envelope["body"]["snapshot"];snapshot["phase"]="BEGINNING";snapshot["step"]="UPKEEP";snapshot["decision"]["family"]="selection";
+            var envelope=Fixture("receive-history-v1.json");var snapshot=envelope["body"]["snapshot"];snapshot["phase"]="BEGINNING";snapshot["step"]="UPKEEP";snapshot["actions_complete"]=true;snapshot["decision"]["family"]="selection";
             snapshot["actions"]=new JArray(new JObject{["action_id"]="pass-offered",["kind"]="pass",["label"]="Pass",["object_id"]=null,["priority_class"]="unknown"});
             var doc=Document(out var node,out var settings);using var surface=new ViewerCardSurface(doc.rootVisualElement);
             using var peer=new ViewerSessionHostTests.Peer(envelope.ToString());var owner=new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -214,7 +255,7 @@ namespace Manaforge.Play.Tests
             using var action=new GameplayActionDrawer(actionDrawer,panel);var priorityDrawer=new GameplayDrawer("Priority");doc.rootVisualElement.Add(priorityDrawer);using var priority=new GameplayPriorityDrawer(priorityDrawer,panel);
             try{
                 float deadline=Time.realtimeSinceStartup+10;while(host.PresentedDecision==null && Time.realtimeSinceStartup<deadline){host.Tick();yield return null;}
-                Assert.That(host.PresentedDecision,Is.Not.Null);panel.Tick();var frame=host.PresentedDecision.Frame;
+                Assert.That(host.PresentedDecision,Is.Not.Null);panel.Priority.Observe(host.PresentedDecision.Frame);panel.Priority.Current.Automatic=false;panel.Tick();var frame=host.PresentedDecision.Frame;
                 panel.Priority.Current.Automatic=false;panel.Priority.Current.Manual=true;panel.Priority.SetStop("step","DRAW",true);
                 priorityDrawer.SetOpen(true);priority.Controls.Root.Q<Foldout>().value=true;Assert.That(panel.PriorityControlsOpen,Is.True);
                 priorityDrawer.SetOpen(false);Assert.That(panel.PriorityControlsOpen,Is.False);Assert.That(panel.Priority.Current.Manual,Is.True);Assert.That(panel.Priority.Current.Stops,Does.Contain("step:DRAW"));

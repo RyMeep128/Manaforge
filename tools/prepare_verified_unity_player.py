@@ -19,7 +19,13 @@ MAX_ARCHIVE = 2 * 1024**3
 MAX_PAYLOAD = 4 * 1024**3
 
 
-def read_report(report, commit):
+def read_report(report, commit, allow_unvalidated=False):
+    if allow_unvalidated and report.get("scope") == "build-only":
+        if (report.get("schema") != 1 or report.get("commit") != commit
+                or report.get("dirty") is not False or report.get("status") != "built"
+                or report.get("tests") != "skipped"):
+            raise ValueError("Exact-revision clean local build receipt required")
+        return
     if (
         report.get("schema") != 1
         or report.get("commit") != commit
@@ -100,7 +106,29 @@ def safe_name(name):
     )
 
 
-def extract(archive, commit, destination):
+def create_build(destination):
+    """Explicit unvalidated prerelease input; never represents test acceptance."""
+    commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+    if subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=normal"], cwd=ROOT, text=True):
+        raise ValueError("A clean committed workspace is required")
+    files = {p.relative_to(PROJECT).as_posix(): p for p in (PROJECT / "Builds/Windows").rglob("*") if p.is_file()}
+    if not {"Builds/Windows/ManaforgePlay.exe", "Builds/Windows/UnityPlayer.dll"}.issubset(files):
+        raise ValueError("Windows player build missing")
+    report = dict(schema=1, commit=commit, dirty=False, scope="build-only", status="built", tests="skipped", files={})
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(destination, "x", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, path in files.items():
+            with path.open("rb") as stream:
+                report["files"][name] = hashlib.file_digest(stream, "sha256").hexdigest()
+            archive.write(path, name)
+        archive.writestr("validation.json", json.dumps(report, indent=2))
+    with destination.open("rb") as stream:
+        digest = hashlib.file_digest(stream, "sha256").hexdigest()
+    destination.with_suffix(".zip.sha256").write_text(digest + "  " + destination.name + "\n")
+    print(f"UNVALIDATED local player: {destination}\nSHA256: {digest}")
+
+
+def extract(archive, commit, destination, allow_unvalidated=False):
     if destination.exists():
         raise ValueError("Use a fresh Unity player destination")
     with zipfile.ZipFile(archive) as source:
@@ -116,7 +144,7 @@ def extract(archive, commit, destination):
         if source.getinfo("validation.json").file_size > 16 * 1024**2:
             raise ValueError("Oversized validation manifest")
         report = json.loads(source.read("validation.json"))
-        read_report(report, commit)
+        read_report(report, commit, allow_unvalidated)
         files = report.get("files", {})
         if set(names) != set(files) | {"validation.json"}:
             raise ValueError("Unity archive file inventory differs from manifest")
@@ -126,6 +154,8 @@ def extract(archive, commit, destination):
             "Artifacts/editmode.xml",
             "Artifacts/playmode.xml",
         }
+        if allow_unvalidated and report.get("scope") == "build-only":
+            required = {"Builds/Windows/ManaforgePlay.exe", "Builds/Windows/UnityPlayer.dll"}
         if not required.issubset(files):
             raise ValueError("Player or test evidence is missing")
         for name, digest in files.items():
@@ -141,10 +171,10 @@ def extract(archive, commit, destination):
             with source.open(entry) as stream, target.open("xb") as output:
                 shutil.copyfileobj(stream, output)
         (destination / "local-validation.json").write_text(json.dumps(report, indent=2))
-    print(f"Verified local Unity validation for {commit}")
+    print(f"Imported local Unity {'build only; tests skipped' if report.get('scope') == 'build-only' else 'validation'} for {commit}")
 
 
-def prepare(url, digest, commit, destination):
+def prepare(url, digest, commit, destination, allow_unvalidated=False):
     if not url.startswith("https://") or not re.fullmatch(r"[0-9a-fA-F]{64}", digest):
         raise ValueError("An HTTPS local Unity archive URL and SHA256 are required")
     with tempfile.TemporaryDirectory(prefix="manaforge-local-unity-") as temporary:
@@ -164,19 +194,23 @@ def prepare(url, digest, commit, destination):
         with archive.open("rb") as stream:
             if hashlib.file_digest(stream, "sha256").hexdigest() != digest.lower():
                 raise ValueError("Unity archive checksum mismatch")
-        extract(archive, commit, destination)
+        extract(archive, commit, destination, allow_unvalidated)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--create", type=Path)
+    parser.add_argument("--create-build", type=Path, help="Archive a clean local build with tests explicitly skipped")
+    parser.add_argument("--allow-unvalidated", action="store_true", help="Allow a build-only receipt for an explicitly untested prerelease")
     parser.add_argument("--url")
     parser.add_argument("--sha256")
     parser.add_argument("--commit")
     args = parser.parse_args()
-    if args.create:
+    if args.create_build:
+        create_build(args.create_build)
+    elif args.create:
         create(args.create)
     elif args.url and args.sha256 and args.commit:
-        prepare(args.url, args.sha256, args.commit, PROJECT / "Builds/Windows")
+        prepare(args.url, args.sha256, args.commit, PROJECT / "Builds/Windows", args.allow_unvalidated)
     else:
         parser.error("Supply --create REPORT or --url URL --sha256 DIGEST --commit SHA")

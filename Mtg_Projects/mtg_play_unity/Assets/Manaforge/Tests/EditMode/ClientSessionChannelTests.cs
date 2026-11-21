@@ -36,6 +36,22 @@ namespace Manaforge.Play.Tests
             public void Prime(bool pending=false){Send(Snapshot());Channel.ReceiveNext(1000);if(pending){Channel.Submit(Command().ToString());WireMessages.Parse(TextFrame.Read(Peer.GetStream()));}}
             public void Dispose(){Channel.Dispose();Peer.Dispose();}
         }
+        [Test] public void ConcessionRemainsAvailableWhileAPriorityCommandIsPending()
+        {
+            using(var p=new Pair()){
+                p.Prime(pending:true);
+                var waiting=Snapshot("waiting",8);waiting["body"]["snapshot"]["decision"]=JValue.CreateNull();waiting["body"]["snapshot"]["actions"]=new JArray();
+                p.Send(waiting);p.Channel.ReceiveNext(1000);
+                Assert.That(p.Channel.CanConcede,Is.True);Assert.That(p.Channel.CanSubmit,Is.False);
+                var concession=p.Channel.Concede();var wire=WireMessages.Parse(TextFrame.Read(p.Peer.GetStream()));
+                Assert.That((string)wire["body"]["operation"],Is.EqualTo("concede"));Assert.That(concession.RequestRevision,Is.EqualTo(8));
+                p.Send(Ack("confirmed"));p.Channel.ReceiveNext(1000);
+                Assert.That(p.Channel.CanConcede,Is.False,"An earlier action receipt must not release the concession reservation");
+                Assert.Throws<WireEnvelope.EnvelopeException>(()=>p.Channel.Concede());
+                var rejected=Ack("rejected");rejected["body"]["command_id"]=concession.CommandId;rejected["body"]["request_revision"]=8;rejected["body"]["code"]="ENGINE_REJECTED";
+                p.Send(rejected);p.Channel.ReceiveNext(1000);Assert.That(p.Channel.CanConcede,Is.True);
+            }
+        }
         [Test] public void ConcessionNeedsActiveSnapshotButNoDecisionAndCannotBeDuplicated()
         {
             using(var p=new Pair()){
@@ -65,7 +81,10 @@ namespace Manaforge.Play.Tests
             p.Send(Snapshot());Assert.That(p.Channel.ReceiveNext(1000).Applied,Is.False);Assert.That(p.Channel.QueuedCount,Is.EqualTo(1));
             p.Channel.Submit(Command().ToString());Assert.That((string)WireMessages.Parse(TextFrame.Read(p.Peer.GetStream()))["body"]["action_id"],Is.EqualTo("fixture-action"));
             p.Send(Ack());Assert.That(p.Channel.ReceiveNext(1000).Receipt.State,Is.EqualTo(CommandState.Submitted));
-            p.Send(Ack("confirmed"));Assert.That(p.Channel.ReceiveNext(1000).Receipt.State,Is.EqualTo(CommandState.Confirmed));Assert.That(p.Channel.CanSubmit,Is.True);
+            p.Send(Ack("confirmed"));Assert.That(p.Channel.ReceiveNext(1000).Receipt.State,Is.EqualTo(CommandState.Confirmed));Assert.That(p.Channel.CanSubmit,Is.False);
+            Assert.That(Assert.Throws<WireEnvelope.EnvelopeException>(()=>p.Channel.Submit(Command("gap-duplicate").ToString())).Code,Is.EqualTo("SESSION_NO_DECISION"));
+            p.Send(Snapshot("fresh",8));p.Channel.ReceiveNext(1000);Assert.That(p.Channel.CanSubmit,Is.True);
+            p.Send(Ack("confirmed"));p.Channel.ReceiveNext(1000);Assert.That(p.Channel.CanSubmit,Is.True,"A late duplicate ACK cannot retire the newer offer");
         }
         [TestCase("malformed","JSON_INVALID")] [TestCase("viewer","ACK_CONTEXT")]
         public void InvalidReceiveStopsPendingCommandsAndRevokesQueuedData(string defect,string code)

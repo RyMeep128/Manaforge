@@ -25,16 +25,18 @@ namespace Manaforge.Play
     {
         internal VisualElement Root {get;}=new VisualElement{name="table-phase-strip"};
         private readonly (string phase,Button button)[] buttons;
+        private string scope="own";
         internal GameplayPhaseStrip(VisualElement parent,Func<UnityPriorityPolicy> policy,Action changed)
         {
             var phases=new[]{("BEGINNING","Begin"),("PRECOMBAT_MAIN","Main 1"),("COMBAT","Combat"),("POSTCOMBAT_MAIN","Main 2"),("END","End")};
-            buttons=phases.Select(phase=>{var button=new Button(()=>{var current=policy();if(current==null)return;bool stop=!current.Current.Stops.Contains("phase:"+phase.Item1);current.SetStop("phase",phase.Item1,stop);changed();}){name="phase-stop-"+phase.Item1,text=phase.Item2,tooltip="Toggle stop in "+phase.Item2};button.AddToClassList("phase-strip-button");Root.Add(button);return (phase.Item1,button);}).ToArray();
+            buttons=phases.Select(phase=>{var button=new Button(()=>{var current=policy();if(current==null)return;bool stop=!current.Current.Stops.Contains(scope+":phase:"+phase.Item1);current.SetStop(scope,"phase",phase.Item1,stop,current.Current.RepeatStops);changed();}){name="phase-stop-"+phase.Item1,text=phase.Item2,tooltip="Toggle stop in "+phase.Item2};button.AddToClassList("phase-strip-button");Root.Add(button);return (phase.Item1,button);}).ToArray();
             parent.Add(Root);
         }
         internal void Present(ProjectedDecisionFrame frame,UnityPriorityPolicy policy)
         {
             string phase=frame.Phase=="ENDING"?"END":frame.Phase;
-            foreach(var entry in buttons){entry.button.EnableInClassList("phase-active",entry.phase==phase);entry.button.EnableInClassList("phase-stopped",policy?.Current.Stops.Contains("phase:"+entry.phase)==true);entry.button.SetEnabled(policy!=null && frame.Result==null);}
+            scope=frame.ActivePlayerId==frame.Context.ViewerId?"own":"opponent";
+            foreach(var entry in buttons){entry.button.tooltip=(scope=="own"?"Your turn: ":"Opponents' turns: ")+entry.phase.Replace('_',' ');entry.button.EnableInClassList("phase-active",entry.phase==phase);entry.button.EnableInClassList("phase-stopped",policy?.Current.Stops.Contains(scope+":phase:"+entry.phase)==true || policy?.Current.Stops.Contains("phase:"+entry.phase)==true);entry.button.SetEnabled(policy!=null && frame.Result==null);}
         }
     }
     // One persistent action area for normal priority and explicit yielding.
@@ -60,11 +62,13 @@ namespace Manaforge.Play
             settings=new Button(openSettings){name="priority-actions-settings",text="Stops & settings"};GameplayTheme.Button(settings);header.Add(settings);
             Root.Add(header);Root.Add(detail);Root.Add(mana);
             alternativeList.horizontalScrollerVisibility=alternativeList.verticalScrollerVisibility=ScrollerVisibility.Hidden;alternativeList.style.maxHeight=96;alternatives.Add(alternativeList);Root.Add(alternatives);
-            primary=new Button(Primary){name="priority-actions-primary",text="Next"};secondary=new Button(Secondary){name="priority-actions-secondary",text="Pass turn"};
+            primary=new Button(Primary){name="priority-actions-primary",text="Next"};secondary=new Button(){name="priority-actions-secondary",text="Pass turn"};
+            secondary.clickable.clickedWithEventInfo+=Secondary;
+            secondary.clickable.activators.Add(new ManipulatorActivationFilter{button=MouseButton.LeftMouse,modifiers=UnityEngine.EventModifiers.Shift});
             GameplayTheme.Button(primary,true);GameplayTheme.Button(secondary);Root.Add(primary);Root.Add(secondary);
             more=new Button(()=>{yieldMenu.style.display=yieldMenu.style.display.value==DisplayStyle.Flex?DisplayStyle.None:DisplayStyle.Flex;yieldMenu.BringToFront();}){name="priority-actions-more",text="…",tooltip="More passing options"};GameplayTheme.Button(more);more.style.width=more.style.minWidth=36;more.style.minHeight=more.style.height=36;more.style.fontSize=18;secondary.style.minWidth=0;secondary.style.right=46;secondary.style.height=secondary.style.minHeight=36;Root.Add(more);
-            yieldTurn=YieldButton("turn","Until my next turn");yieldStack=YieldButton("stack","Until stack changes");yieldEnd=YieldButton("end-turn","End this turn");yieldResolve=YieldButton("resolve-stack","Resolve All");
-            yieldMenu.Add(yieldTurn);yieldMenu.Add(yieldStack);yieldMenu.Add(yieldEnd);yieldMenu.Add(yieldResolve);Root.Add(yieldMenu);yieldMenu.style.display=DisplayStyle.None;
+            yieldTurn=YieldButton("turn","Until my next turn");yieldStack=YieldButton("stack","Until stack changes");yieldEnd=YieldButton("end-turn","Pass turn (ignore responses)");yieldResolve=YieldButton("resolve-stack","Resolve All");
+            yieldMenu.Add(YieldButton("response","Pass until response"));yieldMenu.Add(yieldTurn);yieldMenu.Add(yieldStack);yieldMenu.Add(yieldEnd);yieldMenu.Add(yieldResolve);Root.Add(yieldMenu);yieldMenu.style.display=DisplayStyle.None;
             alternatives.RegisterValueChangedCallback(ev=>{if(ReferenceEquals(ev.target,alternatives) && ev.newValue){yieldMenu.style.display=DisplayStyle.None;alternatives.BringToFront();}});
             Root.RegisterCallback<PointerDownEvent>(ev=>{if(ev.target is VisualElement target && target!=more && !more.Contains(target) && target!=yieldMenu && !yieldMenu.Contains(target))yieldMenu.style.display=DisplayStyle.None;},TrickleDown.TrickleDown);
             Root.RegisterCallback<KeyDownEvent>(ev=>{if(ev.keyCode==UnityEngine.KeyCode.Escape && yieldMenu.style.display.value==DisplayStyle.Flex){yieldMenu.style.display=DisplayStyle.None;more.Focus();ev.StopImmediatePropagation();}},TrickleDown.TrickleDown);
@@ -81,10 +85,10 @@ namespace Manaforge.Play
             else panel.TryPassPriority();
             Refresh();
         }
-        private void Secondary()
+        private void Secondary(EventBase ev)
         {
             if(panel.Priority.Current.Yield!=null)panel.CancelPriorityYield();
-            else panel.TryBeginPriorityYield(panel.PriorityFrame?.StackIds.Count>0?"resolve-stack":panel.PriorityFrame?.ActivePlayerId==panel.PriorityFrame?.Context.ViewerId?"end-turn":"turn");
+            else panel.TryBeginPriorityYield(ev is IPointerEvent pointer && pointer.shiftKey || ev is IMouseEvent mouse && mouse.shiftKey?"end-turn":panel.PriorityFrame?.StackIds.Count>0?"resolve-stack":"response");
             Refresh();
         }
         internal void Refresh()
@@ -106,11 +110,11 @@ namespace Manaforge.Play
             string floating=frame?.ViewerMana==null?"":string.Join(", ",frame.ViewerMana.Where(pair=>pair.Value>0).Select(pair=>pair.Key+" "+pair.Value));
             mana.text=string.IsNullOrEmpty(floating)?"":"Mana: "+floating;
             // Keep the last label through offer gaps; only availability changes immediately.
-            if(priority || yielding || state.Paused){primary.text=state.Paused?"Resume":yielding?"Cancel":frame.StackIds.Count>0?"Resolve":"Next";secondary.text=state.Yield!=null?"Cancel passing":frame.StackIds.Count>0?"Resolve All":frame.ActivePlayerId==frame.Context.ViewerId?"End turn":"Pass turn";}
+            if(priority || yielding || state.Paused){primary.text=state.Paused?"Resume":yielding?"Cancel":frame.StackIds.Count>0?"Resolve":frame.ActivePlayerId==frame.Context.ViewerId?"Next":"Pass";secondary.text=state.Yield!=null?"Cancel passing":frame.StackIds.Count>0?"Resolve All":frame.ActivePlayerId==frame.Context.ViewerId?"End turn":"Pass turn";}
             primary.SetEnabled(!panel.LayoutEditing && (state.Paused && panel.PrioritySessionActive || yielding && panel.PrioritySessionActive || canPass));
             secondary.SetEnabled(!panel.LayoutEditing && (state.Yield!=null && panel.PrioritySessionActive || canPass && !panel.PriorityControlsOpen && !state.Paused));
             primary.tooltip=yielding?"Stop explicit passing. Ordinary auto-pass follows your settings.":frame?.Actions.FirstOrDefault(action=>action.Kind=="pass" && action.ObjectId==null)?.Label;
-            secondary.tooltip=frame?.StackIds.Count>0?"Pass through the current stack. New responses and phase stops still interrupt passing.":"Pass through the turn. Phase stops and required choices still interrupt passing.";
+            secondary.tooltip=frame?.StackIds.Count>0?"Resolve this stack; stop for new objects. Shift-click to pass the turn even through responses.":"Pass until an opponent responds. Shift-click to ignore optional responses. Stops and required choices always interrupt.";
         }
         internal void Reset(){bound=null;HasPresented=false;yieldMenu.style.display=DisplayStyle.None;alternativeList.Clear();alternatives.SetValueWithoutNotify(false);Root.style.display=DisplayStyle.None;primary.SetEnabled(false);secondary.SetEnabled(false);}
     }

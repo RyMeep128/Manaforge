@@ -165,6 +165,11 @@ class MultiplayerLobby:
             raise ValueError("LOBBY_NOT_READY")
         self.started = True
 
+    def return_to_lobby(self):
+        """Retain seats, decks, and payment preferences for another match."""
+        self.started = False
+        self.invalidate()
+
     def public(self):
         return {
             "format": self.format,

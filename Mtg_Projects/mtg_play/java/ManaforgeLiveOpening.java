@@ -30,6 +30,15 @@ public final class ManaforgeLiveOpening {
     private final NativeOrganizationBridge.MetadataCache multiplayerOrganizationMetadata=new NativeOrganizationBridge.MetadataCache();
     private final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(Boolean.getBoolean("manaforge.liveGame")?21600:Boolean.getBoolean("manaforge.loopTurn")?420:Boolean.getBoolean("manaforge.finishAttacks")?240:Boolean.getBoolean("manaforge.postResolutionPass")?240:Boolean.getBoolean("manaforge.continuePriority")?180:90);
     private volatile JsonObject state;
+    @FunctionalInterface private interface StatePublication {void publish(JsonObject view) throws Exception;}
+    private StatePublication multiplayerStatePublication;
+    @FunctionalInterface private interface WaitingInput {void poll() throws Exception;}
+    private WaitingInput multiplayerWaitingInput;
+    private String multiplayerSubmittedCommand;
+    private boolean multiplayerObservationNeedsMetadata;
+    private long multiplayerObservationSequence=-1;
+    private static final class MultiplayerConceded extends Exception {}
+    private boolean multiplayerAwaitingDecision;
     private JsonObject pending;
     private String engineViewer, artifactHash;
     private boolean firstLand,landObserved,unityPriorityPass,firstCreature,castAbilityMatched;
@@ -117,12 +126,18 @@ public final class ManaforgeLiveOpening {
     private JsonObject next() throws Exception {
         while(System.nanoTime()<deadline && !cancelled.get()) {
             if(overflow.get())throw new IOException("LIVE_OPENING_QUEUE_LIMIT");
+            if(multiplayerAwaitingDecision && multiplayerWaitingInput!=null)multiplayerWaitingInput.poll();
             JsonObject event=events.poll(100,TimeUnit.MILLISECONDS);
-            if(event==null)continue;
+            if(event==null){if(multiplayerAwaitingDecision && multiplayerObservationNeedsMetadata && multiplayerStatePublication!=null)multiplayerStatePublication.publish(bridge.currentState());continue;}
             String kind=event.get("event").getAsString();
             if(kind.equals("error") || kind.equals("disconnected"))throw new IOException("LIVE_OPENING_ENGINE_FAILED");
             if(kind.equals("game_started")){game=event.get("game_id").getAsString();engineViewer=event.get("player_id").getAsString();}
-            if(kind.equals("game_state"))state=event;
+            if(kind.equals("game_state")){
+                state=event;
+                // advance() can wait here until the other player passes priority.
+                // Publish this seat's own GameViews during that wait as they arrive.
+                if(multiplayerAwaitingDecision && !recoveryPaused && !recoveryAI && !recoveryEnding && multiplayerStatePublication!=null)multiplayerStatePublication.publish(state);
+            }
             if(kind.equals("game_result"))terminalCallback=event.deepCopy();
             if(kind.equals("decision"))pending=event;
             return event;
@@ -578,7 +593,7 @@ public final class ManaforgeLiveOpening {
                         Thread.sleep(25);
                     }throw new IOException("SESSION_REQUEST_CONTEXT_UNPROVEN");
                 }
-                public JsonObject metadata(JsonObject view,String... ids) throws Exception{Set<String> requested=new LinkedHashSet<>(Arrays.asList(ids));if(commanderTrace!=null)requested.addAll(Arrays.asList(commanderTrace.requested(view)));JsonObject result=sourceMetadata(view,requested.toArray(new String[0]));if(liveLaunch!=null)liveLaunch.verifyCommanders(view,result);if(commanderTrace!=null)commanderTrace.observe(view,result);return result;}
+                public JsonObject metadata(JsonObject view,String... ids) throws Exception{Set<String> requested=new LinkedHashSet<>(Arrays.asList(ids));if(Boolean.getBoolean("manaforge.multiplayer"))requested.addAll(Arrays.asList(NativeOrganizationBridge.MetadataCache.includeBattlefield(view)));if(commanderTrace!=null)requested.addAll(Arrays.asList(commanderTrace.requested(view)));JsonObject result=sourceMetadata(view,requested.toArray(new String[0]));if(liveLaunch!=null)liveLaunch.verifyCommanders(view,result);if(commanderTrace!=null)commanderTrace.observe(view,result);return result;}
                 public JsonObject submit(JsonObject command) throws Exception{return request(command,"response_sent");}
                 public JsonObject concede(JsonObject command) throws Exception{return request(command,"concede_sent");}
                 public ManaforgeGameplaySession.Advance finishConcession() throws Exception {
@@ -851,6 +866,7 @@ public final class ManaforgeLiveOpening {
             }
             JsonObject ready=new JsonObject();ready.add("seats",addresses);java.nio.file.Files.write(java.nio.file.Paths.get(args[2]),ready.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8),java.nio.file.StandardOpenOption.CREATE_NEW);
             Thread lifeline=new Thread(()->{try{while(System.in.read()!=-1){}}catch(IOException ignored){}for(ManaforgeLiveOpening p:peers)p.cancelled.set(true);},"multiplayer-owner");lifeline.setDaemon(true);lifeline.start();
+            int statusWriteFailures=0;
             while(!peers[0].cancelled.get() && !peers[1].cancelled.get()){
                 java.nio.file.Path control=root.resolve("recovery-gateway-command.json");
                 if(java.nio.file.Files.isRegularFile(control)){
@@ -869,7 +885,17 @@ public final class ManaforgeLiveOpening {
                 }
                 JsonObject status=new JsonObject();status.addProperty("game",peers[0].game);status.addProperty("guest_native_id",peers[1].engineViewer);status.addProperty("connected",host.status(peers[1].liveLaunch.viewer()).status==ManaforgeMatchCoordinator.Status.CONNECTED);
                 JsonArray publicSeats=new JsonArray();for(ManaforgeLiveOpening p:peers){JsonObject row=new JsonObject();row.addProperty("seat_id",p.liveLaunch.viewer());row.addProperty("name",p.liveLaunch.playerName());row.add("commanders",p.liveLaunch.commanderNames());if(p.state!=null)for(JsonElement item:p.state.getAsJsonArray("players")){JsonObject player=item.getAsJsonObject();if(player.get("id").getAsString().equals(p.engineViewer)){row.add("life",player.get("life"));row.add("left",player.get("left"));}}publicSeats.add(row);}status.add("seats",publicSeats);
-                java.nio.file.Path temporary=root.resolve("recovery-gateway-status.tmp");java.nio.file.Files.write(temporary,status.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));try{java.nio.file.Files.move(temporary,root.resolve("recovery-gateway-status.json"),java.nio.file.StandardCopyOption.REPLACE_EXISTING);}catch(java.nio.file.AccessDeniedException readerBusy){/* Windows reader owns the previous complete status; retry next tick. */}
+                java.nio.file.Path temporary=root.resolve("recovery-gateway-status.tmp");
+                try{
+                    java.nio.file.Files.write(temporary,status.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                    java.nio.file.Files.move(temporary,root.resolve("recovery-gateway-status.json"),java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                    statusWriteFailures=0;
+                }catch(java.nio.file.FileSystemException readerBusy){
+                    // Windows sharing violations may be FileSystemException rather
+                    // than AccessDeniedException. Retain the previous complete status
+                    // and retry; persistent storage failures must still end the session.
+                    if(++statusWriteFailures>=100)throw readerBusy;
+                }
                 Thread.sleep(50);
             }
         }catch(Exception failure){multiplayerFailure(peers,failureRoot,failure);System.err.println("MULTIPLAYER_STARTUP_FAILED");}
@@ -891,19 +917,37 @@ public final class ManaforgeLiveOpening {
         if(context==null)return;
         ManaforgeOpeningProjection projection=new ManaforgeOpeningProjection(liveLaunch.session(),liveLaunch.viewer(),engineViewer,liveLaunch.bindings());
         JsonObject waiting=new JsonObject();waiting.addProperty("kind","GAME_ASK");waiting.addProperty("is_priority",false);waiting.addProperty("decision_id",0);waiting.addProperty("message","Waiting for the other player");
-        waiting.add("cycle",state.get("cycle"));JsonObject initial=projection.projectCoreCombat(state,waiting,true);initial.add("decision",JsonNull.INSTANCE);initial.add("actions",new JsonArray());projection.invalidateDecision();
+        waiting.add("cycle",state.get("cycle"));JsonObject initial=projection.projectCoreObservation(multiplayerObservation(state));
         JsonObject envelope=multiplayerEnvelope(initial,false);
         try(ManaforgeOpeningSession owner=new ManaforgeOpeningSession(context,projection,envelope.toString())){
+            multiplayerStatePublication=view->{if(view==null)return;JsonObject enriched=multiplayerObservation(view);long sequence=view.has("sequence")?view.get("sequence").getAsLong():view.get("cycle").getAsLong();if(multiplayerObservationNeedsMetadata && sequence==multiplayerObservationSequence)return;multiplayerObservationSequence=sequence;JsonObject update=multiplayerEnvelope(projection.projectCoreObservation(enriched),false);owner.observe(update.toString());sendMultiplayer(host,projection,update);};
+            multiplayerWaitingInput=()->{
+                if(recoveryPaused || recoveryAI || recoveryEnding)return;
+                String wire=inputs.peek();if(wire==null || !"concede".equals(manaforge.protocol.WireMessages.parse(wire).getAsJsonObject("body").get("operation").getAsString()))return;
+                inputs.poll();manaforge.protocol.SubmissionLedger.Prepared admitted=owner.dispatch(wire,game,engineViewer,0,state.get("cycle").getAsLong());sendMultiplayer(host,projection,admitted.receipt());if(!admitted.shouldSubmit)return;
+                JsonObject command=owner.pollNative();if(command==null || !"concede".equals(command.get("command").getAsString()))throw new IOException("MULTIPLAYER_WAITING_INPUT");
+                if(multiplayerSubmittedCommand!=null){sendMultiplayer(host,projection,owner.uncertain(multiplayerSubmittedCommand));multiplayerSubmittedCommand=null;}
+                // Concession does not require priority. Stay on the serialized seat
+                // owner, but stop polling inputs recursively while proving the result.
+                multiplayerWaitingInput=null;
+                JsonObject before=state.deepCopy(),accepted=request(command,"concede_sent");while(terminalCallback==null)next();
+                NativeCastCorrelation.TurnDecisionEvidence proof=NativeCastCorrelation.concessionEvidence(before,command,accepted,multiplayerTerminal(),terminalCallback);
+                if(proof==null)throw new IOException("CONCESSION_TERMINAL_UNPROVEN");
+                sendMultiplayer(host,projection,owner.confirmTurnDecision(command.get("request_id").getAsString(),proof));publishMultiplayerResult(host,owner,projection);throw new MultiplayerConceded();
+            };
+            multiplayerAwaitingDecision=true;
             sendMultiplayer(host,projection,envelope);CoreCombatCycle gameplay=new CoreCombatCycle(projection);ManaforgeUnityOpening.TurnOffer turn=null;
+            try{
             while(!cancelled.get()){
                 long wakeVersion=multiplayerWake.version();
                 contexts.poll(); // Reauthentication preserves this seat's command ledger.
-                if(recoveryReset){recoveryReset=false;turn=null;pending=null;recoveryHide=true;}
-                if(recoveryHide){recoveryHide=false;waiting.add("cycle",state.get("cycle"));JsonObject refreshed=projection.projectCoreCombat(state,waiting,true);refreshed.add("decision",JsonNull.INSTANCE);refreshed.add("actions",new JsonArray());projection.invalidateDecision();JsonObject reset=multiplayerEnvelope(refreshed,false);owner.observe(reset.toString());sendMultiplayer(host,projection,reset);}
+                if(recoveryReset){recoveryReset=false;turn=null;pending=null;multiplayerAwaitingDecision=true;recoveryHide=true;}
+                if(recoveryHide){recoveryHide=false;waiting.add("cycle",state.get("cycle"));JsonObject refreshed=projection.projectCoreObservation(multiplayerObservation(state));JsonObject reset=multiplayerEnvelope(refreshed,false);owner.observe(reset.toString());sendMultiplayer(host,projection,reset);}
                 if(recoveryPaused || recoveryAI){String blocked;while((blocked=inputs.poll())!=null)sendMultiplayer(host,projection,owner.rejectPaused(blocked));if(recoveryAI)while(!events.isEmpty()){next();pending=null;}multiplayerWake.await(wakeVersion,cancelled::get);continue;}
                 if(recoveryRefresh){recoveryRefresh=false;if(turn!=null){JsonObject choice=bridge.currentDecision();if(choice!=null && choice.get("decision_id").getAsLong()==turn.decision){state=bridge.currentState();turn=gameplay.offer(choice);owner.observe(turn.snapshot().toString());sendMultiplayer(host,projection,turn.snapshot());}}}
                 if(turn==null){
                     if(pending==null && events.isEmpty()){
+                        if(multiplayerObservationNeedsMetadata && inputs.isEmpty()){multiplayerStatePublication.publish(state);if(multiplayerObservationNeedsMetadata){Thread.sleep(50);continue;}}
                         String idle=inputs.poll();if(idle==null){multiplayerWake.await(wakeVersion,cancelled::get);continue;}
                         manaforge.protocol.SubmissionLedger.Prepared admitted=owner.dispatch(idle,game,engineViewer,0,state.get("cycle").getAsLong());sendMultiplayer(host,projection,admitted.receipt());if(!admitted.shouldSubmit)continue;
                         JsonObject command=owner.pollNative();if(command==null || !"concede".equals(command.get("command").getAsString()))throw new IOException("MULTIPLAYER_WAITING_INPUT");
@@ -914,26 +958,41 @@ public final class ManaforgeLiveOpening {
                     JsonObject event=pending==null?next():pending;
                     if(terminalCallback!=null){publishMultiplayerResult(host,owner,projection);break;}
                     if(!"decision".equals(event.get("event").getAsString()))continue;
-                    pending=null;turn=gameplay.offer(event);owner.observe(turn.snapshot().toString());sendMultiplayer(host,projection,turn.snapshot());
+                    pending=null;turn=gameplay.offer(event);multiplayerAwaitingDecision=false;owner.observe(turn.snapshot().toString());sendMultiplayer(host,projection,turn.snapshot());
                 }
                 String wire=inputs.poll();
                 if(wire==null){
                     ManaforgeUnityOpening.TurnOffer replacement=turn.poll();if(replacement!=null){turn=replacement;owner.observe(turn.snapshot().toString());sendMultiplayer(host,projection,turn.snapshot());}
-                    if(!events.isEmpty()){JsonObject event=next();if(terminalCallback!=null){publishMultiplayerResult(host,owner,projection);break;}if("decision".equals(event.get("event").getAsString())){pending=null;turn=gameplay.offer(event);owner.observe(turn.snapshot().toString());sendMultiplayer(host,projection,turn.snapshot());}continue;}
+                    if(!events.isEmpty()){JsonObject event=next();if(terminalCallback!=null){publishMultiplayerResult(host,owner,projection);break;}if("decision".equals(event.get("event").getAsString())){pending=null;turn=gameplay.offer(event);multiplayerAwaitingDecision=false;owner.observe(turn.snapshot().toString());sendMultiplayer(host,projection,turn.snapshot());}continue;}
                     multiplayerWake.await(wakeVersion,cancelled::get);
                     continue;
                 }
                 manaforge.protocol.SubmissionLedger.Prepared admitted=owner.dispatch(wire,game,engineViewer,turn.decision,turn.cycle);sendMultiplayer(host,projection,admitted.receipt());if(!admitted.shouldSubmit)continue;
                 JsonObject command=owner.pollNative();if(command==null)throw new IOException("MULTIPLAYER_QUEUE_FAILED");
+                multiplayerAwaitingDecision=true;
+                multiplayerSubmittedCommand=command.get("request_id").getAsString();
                 long engineStarted=System.nanoTime();ManaforgeUnityOpening.TurnResult result="concede".equals(command.get("command").getAsString())?turn.concession.submit(command):turn.submit.submit(command);
+                multiplayerSubmittedCommand=null;
+                multiplayerAwaitingDecision=result.next==null;
                 ManaforgeMatchCoordinator.timing("engine_complete",command.get("request_id").getAsString(),engineStarted,result.snapshot.getAsJsonObject("body").getAsJsonObject("snapshot").get("revision").getAsLong());
                 sendMultiplayer(host,projection,owner.confirmTurnDecision(command.get("request_id").getAsString(),result.evidence));owner.observe(result.snapshot.toString());sendMultiplayer(host,projection,result.snapshot);turn=result.next;
                 if("result".equals(result.snapshot.get("message_type").getAsString()))break;
             }
+            }catch(MultiplayerConceded completed){/* Terminal evidence and result were published by the waiting owner. */}
             while(!cancelled.get())Thread.sleep(50);
+        }finally{
+            multiplayerStatePublication=null;multiplayerWaitingInput=null;multiplayerSubmittedCommand=null;multiplayerAwaitingDecision=false;
         }
     }
     private JsonObject multiplayerEnvelope(JsonObject snapshot,boolean terminal){JsonObject envelope=new JsonObject(),body=new JsonObject();envelope.addProperty("wire_version",1);envelope.addProperty("message_type",terminal?"result":"snapshot");envelope.addProperty("message_id","multi-"+snapshot.get("revision").getAsLong());body.addProperty("fixture_only",false);body.add("snapshot",snapshot);envelope.add("body",body);return envelope;}
+    private JsonObject multiplayerObservation(JsonObject view) throws Exception {
+        List<String> sources=new ArrayList<>();for(JsonElement card:view.getAsJsonArray("stack"))sources.add(card.getAsJsonObject().get("id").getAsString());
+        String[] ids=NativeOrganizationBridge.MetadataCache.includeBattlefield(view,sources.toArray(new String[0]));
+        JsonObject query=new JsonObject();query.addProperty("command","metadata");query.addProperty("game",game);query.addProperty("player",engineViewer);query.add("cycle",view.get("cycle"));JsonArray requested=new JsonArray();for(String id:ids)requested.add(id);query.add("object_ids",requested);query.add("identified_ids",requested.deepCopy());
+        JsonObject guard=metadataClient.read(query);multiplayerObservationNeedsMetadata=!new JsonPrimitive("ok").equals(guard.get("status")) || !view.get("cycle").equals(guard.get("cycle"));
+        if(multiplayerObservationNeedsMetadata)return view;
+        multiplayerOrganizationMetadata.observe(view,guard);return ManaforgeGameplaySession.decorate(view,guard);
+    }
     private void sendMultiplayer(ManaforgeMatchCoordinator host,ManaforgeOpeningProjection projection,JsonObject packet) throws Exception {
         host.sendGameplay(liveLaunch.viewer(),packet);
         String type=packet.get("message_type").getAsString();if(!type.equals("snapshot"))return;

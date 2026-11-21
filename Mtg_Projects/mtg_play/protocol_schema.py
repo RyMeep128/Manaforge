@@ -86,6 +86,9 @@ def contract_schema():
             properties["stack_targets"]["anyOf"][0]["maxItems"] = 4096
             definition["required"].remove("decision_error")
             definition["required"].remove("session_notice")
+            definition["required"].remove("priority_hints")
+            definition["required"].remove("priority_object_id")
+            properties["priority_hints"]["anyOf"][0]["maxItems"] = 16
         if name == "ChoiceRequest":
             definition["required"].remove("groups")
             definition["required"].remove("request")

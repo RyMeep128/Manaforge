@@ -8,6 +8,64 @@ import textwrap
 import pytest
 
 
+@pytest.mark.parametrize("outcome", ["win", None])
+def test_finished_or_crashed_game_keeps_the_existing_lobby(tmp_path, outcome):
+    products = Path(__file__).resolve().parents[2]
+    script = textwrap.dedent(
+        f"""
+        import sys
+        sys.path[:0] = [{str(products)!r}, {str(products / 'mtg_core')!r}, {str(products / 'mtg_play/tests')!r}]
+        from PyQt6 import QtWidgets as W
+        from mtg_play.workspace import PlayWorkspace
+        from mtg_play.multiplayer import MultiplayerLobby
+        from generate_launch_fixtures import native_deck
+        app = W.QApplication([])
+        PlayWorkspace.load_decks = lambda self: None
+        widget = PlayWorkspace(None, lambda: None)
+        panel = widget.multiplayer
+        class Relay:
+            closed = False
+            code = 'ABCDEFGHJKLM'
+            def __init__(self): self.messages = []
+            def payload(self, body, target=None): self.messages.append((body, target))
+        relay = Relay()
+        panel.relay = relay
+        panel.hosting = panel.admitted = True
+        panel.guest_peer = 'retained-peer'
+        model = panel.model = MultiplayerLobby()
+        model.join()
+        model.select(0, native_deck(False))
+        model.select(1, native_deck(False))
+        model.ready(0, True)
+        model.ready(1, True)
+        decks = [seat.deck for seat in model.seats]
+        model.start()
+        panel.started = True
+        panel._status('fixture', 'completed' if {outcome!r} else 'failed', {{'outcome': {outcome!r}}})
+        assert panel.relay is relay and not relay.closed and panel.admitted
+        assert panel.model is model and not panel.started and not model.started
+        assert [seat.deck for seat in model.seats] == decks
+        assert all(not seat.ready for seat in model.seats)
+        assert any(body['type'] == 'return_to_lobby' and target == 'retained-peer' for body, target in relay.messages)
+        count = len(relay.messages)
+        panel._status('late-cancelled-job', 'failed', 'SESSION_EOF')
+        assert len(relay.messages) == count
+        model.ready(0, True)
+        model.ready(1, True)
+        assert model.can_start
+        panel.relay = None
+        panel.reset()
+        print('LOBBY_RETAINED')
+        """
+    )
+    completed = subprocess.run(
+        [sys.executable, "-I", "-c", script], capture_output=True, text=True, timeout=20,
+        env={**os.environ, "QT_QPA_PLATFORM": "offscreen", "PRINT_PROXY_PREP_DATA_DIR": str(tmp_path)},
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert "LOBBY_RETAINED" in completed.stdout
+
+
 @pytest.mark.parametrize("failure_mode", ["message", "close"])
 def test_host_button_survives_qt_events_and_receives_join_code(tmp_path, failure_mode):
     products = Path(__file__).resolve().parents[2]

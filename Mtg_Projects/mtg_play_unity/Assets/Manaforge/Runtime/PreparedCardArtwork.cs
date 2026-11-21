@@ -13,7 +13,10 @@ namespace Manaforge.Play
         internal ViewerArtworkRequest(ViewerSurfaceTicket ticket,ProjectedObservation card)
         {Ticket=ticket;ObjectId=card.Id;Revision=card.Context.Revision;OracleId=card.OracleId;PrintingId=card.PrintingId;FaceName=card.Name;}
         internal ViewerArtworkRequest(ViewerSurfaceTicket ticket,ProjectedCard card)
-        {Ticket=ticket;ObjectId=card.ObjectId;Revision=card.Context.Revision;OracleId=card.Printing.OracleId;PrintingId=card.Printing.PrintingId;FaceName=card.Characteristics?.Name;Transformed=card.Characteristics?.Transformed;}
+        {Ticket=ticket;ObjectId=card.ObjectId;Revision=card.Context.Revision;OracleId=card.Printing.OracleId;PrintingId=card.Printing.PrintingId;FaceName=ArtworkFaceName(card);Transformed=ArtworkTransformed(card);}
+        private static bool PhysicalSourceArt(ProjectedCard card)=>card.Characteristics?.IsCopy==true || card.Characteristics?.TypeLine=="Ability";
+        private static string ArtworkFaceName(ProjectedCard card)=>PhysicalSourceArt(card)?null:card.Characteristics?.Name;
+        private static bool? ArtworkTransformed(ProjectedCard card)=>PhysicalSourceArt(card)?false:card.Characteristics?.Transformed;
         internal static bool FaceSensitive(string layout)
         {
             switch(layout){
@@ -21,7 +24,7 @@ namespace Manaforge.Play
                 default:return true;
             }
         }
-        internal bool MatchesFace(ProjectedCard card,string layout)=>!FaceSensitive(layout) || FaceName==card.Characteristics?.Name && Transformed==card.Characteristics?.Transformed;
+        internal bool MatchesFace(ProjectedCard card,string layout)=>!FaceSensitive(layout) || FaceName==ArtworkFaceName(card) && Transformed==ArtworkTransformed(card);
     }
     // Ephemeral metadata from the trusted existing Core catalog, not a second card database.
     public sealed class CatalogArtworkFace
