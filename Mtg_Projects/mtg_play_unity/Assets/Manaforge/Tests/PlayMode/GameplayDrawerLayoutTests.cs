@@ -50,6 +50,7 @@ namespace Manaforge.Play.Tests
                 snapshot["objects"]=dense;
                 string session=(string)snapshot["session_id"],viewer=(string)snapshot["viewer_id"];var ticket=arena.Surface.BeginViewer(session,viewer);arena.Surface.TryPresent(ticket,ViewerCardProjection.ParseSnapshot(message.ToString(),session,viewer,0,true));var frame=ViewerDecisionProjection.ParseSnapshot(message.ToString(),session,viewer,0,true);
                 var root=doc.rootVisualElement;var action=root.Q<GameplayDrawer>("action-drawer");var priority=root.Q<GameplayDrawer>("priority-drawer");var zones=root.Q<GameplayDrawer>("zones-drawer");var commanders=root.Q<GameplayDrawer>("commander-drawer");
+                foreach(var drawer in root.Query<GameplayDrawer>().ToList())Assert.That(drawer.IsOpen,Is.False,"HUD panels start collapsed: "+drawer.name);
                 action.Content.Add(new Button{text="Fixture action"});priority.Content.Add(new Toggle("Fixture preference"));
                 foreach(var size in new[]{new Vector2Int(1280,720),new Vector2Int(1366,768),new Vector2Int(1920,1080),new Vector2Int(2560,1440)}){
                     target=new RenderTexture(size.x,size.y,24);target.Create();settings.targetTexture=target;root.style.width=size.x;root.style.height=size.y;yield return null;arena.Present(frame);root.Q<GameplayPlayerHud>().Present(frame,arena.Surface,"commander");yield return null;
@@ -68,7 +69,7 @@ namespace Manaforge.Play.Tests
                     arena.Present(frame);root.Q<GameplayPlayerHud>().Present(frame,arena.Surface,"commander");yield return null;
                     var localSeat=root.Q<PlayerPanel>("local-seat");
                     var life=root.Q<GameplayDrawer>("player-life-drawer");
-                    Assert.That(life.Content.Contains(localSeat),Is.True);Assert.That(life.IsOpen,Is.True);
+                    Assert.That(life.Content.Contains(localSeat),Is.True);life.SetReducedMotion(true);life.SetOpen(true);for(int i=0;i<3;i++)yield return null;
                     Assert.That(root.worldBound.Contains(localSeat.worldBound.center),Is.True);
                     var cardBounds=arena.Surface.CardsRoot.worldBound;
                     var placements=new Dictionary<CardView,(float x,float y,float width,float height,DisplayStyle display)>();
@@ -105,7 +106,7 @@ namespace Manaforge.Play.Tests
                     settings.targetTexture=null;RenderTexture.active=previous;target.Release();UnityEngine.Object.Destroy(target);target=null;
                 }
                 arena.Surface.ClearViewer(ticket);Assert.That(root.Query<PlayerPanel>().ToList(),Is.Empty);Assert.That(root.Query<ZonePile>().ToList(),Is.Empty);
-                foreach(var drawer in new[]{action,priority,commanders})Assert.That(drawer.IsOpen,Is.False);Assert.That(zones.IsOpen,Is.True,"The zone bank returns to its visible default");
+                foreach(var drawer in new[]{action,priority,commanders})Assert.That(drawer.IsOpen,Is.False);Assert.That(zones.IsOpen,Is.False,"The zone bank returns to its collapsed default");
             }finally{settings.targetTexture=null;RenderTexture.active=previous;if(target!=null){target.Release();UnityEngine.Object.Destroy(target);}UnityEngine.Object.Destroy(node);UnityEngine.Object.Destroy(settings);}yield return null;
         }
     }

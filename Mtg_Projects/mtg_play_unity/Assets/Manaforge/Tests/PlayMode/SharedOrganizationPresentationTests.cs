@@ -104,7 +104,7 @@ namespace Manaforge.Play.Tests
             Assert.That(a.Root.Q("organization-controls").style.display.value,Is.EqualTo(DisplayStyle.None),"No permanent organization toolbar");
             var table=a.Root.Q("arena-table");using(var context=PointerDownEvent.GetPooled(new Event{type=EventType.MouseDown,button=1,mousePosition=table.LocalToWorld(new Vector2(500,180))})){context.target=table;table.SendEvent(context);}Assert.That(a.Root.Q("organization-controls").style.display.value,Is.EqualTo(DisplayStyle.None));
             using(var key=KeyDownEvent.GetPooled('g',KeyCode.G,EventModifiers.None)){key.target=table;table.SendEvent(key);}Assert.That(a.Root.Q("organization-controls").style.display.value,Is.EqualTo(DisplayStyle.None));Assert.That(a.Root.Q<Button>("battlefield-groups"),Is.Null);Assert.That(a.Peer.PendingCommandBytes,Is.Zero);
-            Assert.That(a.Root.Q<GameplayDrawer>("zones-drawer").IsOpen,Is.True,"Decks and zones are visible by default");
+            Assert.That(a.Root.Q<GameplayDrawer>("zones-drawer").IsOpen,Is.False,"Zones start collapsed by default");
             // Editing uses the independent organization channel and broadcasts authoritative geometry.
             Submit(a.Root.Q<Button>("organization-edit-g"));
             Submit(a.Root.Q<Button>("organization-rename"));a.Root.Q<TextField>("organization-name").value="Renamed";

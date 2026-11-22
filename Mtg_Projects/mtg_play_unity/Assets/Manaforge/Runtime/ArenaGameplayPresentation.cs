@@ -58,7 +58,7 @@ namespace Manaforge.Play
             Surface.InspectionView.AddToClassList("table-inspection");Surface.InspectionView.SetPresentation(CardPresentationMode.Full,290);Surface.InspectionView.style.display=DisplayStyle.None;
             links=new BattlefieldLinks();root.Add(links);links.SetSource(BuildCombatLinks);combatLinksRefresh=links.schedule.Execute(()=>{if(!disposed && frame?.Combat.Count>0)links.MarkDirtyRepaint();}).Every(16);
             navigation=new VisualElement{name="board-navigation",pickingMode=PickingMode.Ignore};root.Add(navigation);
-            turnsDrawer=new GameplayDrawer("Turns",GameplayDrawerDirection.Down,true){name="turns-panel"};root.Add(turnsDrawer);
+            turnsDrawer=new GameplayDrawer("Turns",GameplayDrawerDirection.Down){name="turns-panel"};root.Add(turnsDrawer);
             status=Label("table-phase","Connecting...");turnsDrawer.Content.Add(status);status.style.position=Position.Relative;status.style.left=status.style.top=0;status.style.width=StyleKeyword.Auto;status.style.height=34;status.style.fontSize=13;status.style.paddingLeft=status.style.paddingRight=status.style.paddingTop=status.style.paddingBottom=0;status.style.marginBottom=4;
             phaseStrip=new GameplayPhaseStrip(turnsDrawer.Content,()=>Decisions?.Priority,()=>{Decisions?.PrioritySettingsChanged();if(frame!=null)phaseStrip.Present(frame,Decisions?.Priority);});
             phaseStrip.Root.style.position=Position.Relative;phaseStrip.Root.style.left=phaseStrip.Root.style.top=0;phaseStrip.Root.style.height=28;
@@ -66,7 +66,7 @@ namespace Manaforge.Play
             turnsDrawer.Content.style.paddingLeft=turnsDrawer.Content.style.paddingRight=8;turnsDrawer.Content.style.paddingTop=turnsDrawer.Content.style.paddingBottom=8;
             PlaceTurns();
             hud=new GameplayPlayerHud(localSeatAtBottom:true,registry:HudRegistry,lifePanel:true);hud.AddToClassList("arena-player-hud");root.Add(hud);root.Add(hud.LifeDrawer);hud.PlayerActivated+=ActivatePlayer;
-            zonePanelDrawer=new GameplayDrawer("Zones",GameplayDrawerDirection.Left,true){name="zones-drawer"};root.Add(zonePanelDrawer);
+            zonePanelDrawer=new GameplayDrawer("Zones",GameplayDrawerDirection.Left){name="zones-drawer"};root.Add(zonePanelDrawer);
             var zoneScroll=new ScrollView(ScrollViewMode.Vertical){name="zone-panel-scroll",horizontalScrollerVisibility=ScrollerVisibility.Hidden};zoneScroll.pickingMode=PickingMode.Ignore;zoneScroll.contentViewport.pickingMode=PickingMode.Ignore;zoneScroll.contentContainer.pickingMode=PickingMode.Ignore;zoneScroll.style.maxHeight=Length.Percent(100);zonePanelDrawer.Content.Add(zoneScroll);
             zonePanel=new GameplayZonePanel(Surface.CardBacks);zoneScroll.Add(zonePanel);zonePanel.BrowseRequested+=BrowseZone;
             Surface.Clearing+=ClearZoneResources;Surface.Rebinding+=ClearPileArt;
@@ -165,7 +165,7 @@ namespace Manaforge.Play
             seenStack.Clear();stackFocused=false;stackForegroundOrder=0;stackAttentionUntil=0;stackPanel.style.display=stackCards.style.display=stackToolbar.style.display=stackBackdrop.style.display=DisplayStyle.None;hud?.ClearPresentation();ClearCardFocus();inspecting=false;inspector?.Hide(false);CloseInspection();openZone=openZoneOwner=null;opponentHand.Clear();animations?.Clear();links.MarkDirtyRepaint();
             zoneDrawer?.ClearBinding();
             root.RemoveFromClassList("browsing-public-zone");frame=null;dismissedZoneDecision=null;rowPages.Clear();handOrder.Clear();
-            zonePanel.ClearBinding();if(actionBinding!=null)actionBinding.Reset();else actionDrawer.Reset();priorityDrawer.Reset();zonePanelDrawer.Reset(true);
+            zonePanel.ClearBinding();if(actionBinding!=null)actionBinding.Reset();else actionDrawer.Reset();priorityDrawer.Reset();zonePanelDrawer.Reset();turnsDrawer.Reset();
 
         }
         private Label Label(string name,string text){var label=new Label(text){name=name,enableRichText=false};root.Add(label);return label;}

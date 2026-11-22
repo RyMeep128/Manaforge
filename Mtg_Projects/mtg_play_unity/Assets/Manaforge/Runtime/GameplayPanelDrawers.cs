@@ -123,7 +123,7 @@ namespace Manaforge.Play
     {
         public GameplayDrawer Drawer {get;}
         private readonly ViewerDecisionPanel decisions;
-        private string context,decision;private bool failed,prioritySeen;
+        private string context,decision;private bool failed;
         public GameplayActionDrawer(GameplayDrawer drawer,ViewerDecisionPanel decisions){Drawer=drawer;this.decisions=decisions;}
         public void Refresh(ProjectedDecisionFrame frame)
         {
@@ -131,12 +131,11 @@ namespace Manaforge.Play
             if(context!=next){Reset();context=next;}
             bool mandatory=frame.Decision!=null && !frame.Decision.IsPriority && frame.Decision.PlayerId==frame.Context.ViewerId;
             bool error=frame.UnsupportedFields.Contains("decision") || decisions.Root.ClassListContains("command-uncertain") || decisions.Presentation?.Mode==YieldPresentationMode.Failed;
-            if(decisions.UnifiedPriorityActions && frame.Decision?.IsPriority==true && !prioritySeen){prioritySeen=true;Drawer.SetOpen(true);}
             if(mandatory && decision!=frame.Decision.DecisionId || error && !failed)Drawer.SetOpen(true);
             decision=frame.Decision?.DecisionId;failed=error;
             Drawer.SetAttention(mandatory || error,error?"Needs attention":mandatory?"Choice required":null);Drawer.RefreshInput();
         }
-        public void Reset(){context=decision=null;failed=prioritySeen=false;Drawer.Reset();}
+        public void Reset(){context=decision=null;failed=false;Drawer.Reset();}
         public void Dispose(){Drawer.Dispose();}
     }
     public sealed class GameplayPriorityDrawer : IDisposable
