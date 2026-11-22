@@ -26,6 +26,14 @@ namespace Manaforge.Play
             for(var parent=button.parent;parent!=null;parent=parent.parent)if(parent is Foldout foldout)foldout.value=true;
             using(var submit=NavigationSubmitEvent.GetPooled()){submit.target=button;button.SendEvent(submit);}
         }
+        private bool TryCustomize()
+        {
+            menu.Open();var button=root.Q<Button>("game-menu-customize-layout");
+            // Multiplayer synchronization can pause the menu after CanOpen was checked.
+            // Release the overlay and let the authenticated game advance before retrying.
+            if(!menu.IsOpen || button?.enabledInHierarchy!=true){menu.Close();started=Time.realtimeSinceStartup;return false;}
+            Submit("game-menu-customize-layout");return arena.LayoutEditor.IsEditing;
+        }
         private static void Require(bool condition,string message){if(!condition)throw new InvalidOperationException(message);}
         // true holds the gameplay acceptance driver for this frame; the authenticated host still ticks.
         public bool Tick()
@@ -35,13 +43,13 @@ namespace Manaforge.Play
                 if(phase==0){
                     if(!editor.CanOpen)return false;
                     started=Time.realtimeSinceStartup;baseline=editor.Controller.State(GameplayHudIds.Actions).FloatingRect;
-                    menu.Open();Submit("game-menu-customize-layout");Require(editor.IsEditing && !menu.IsOpen,"Customize did not open from menu");evidence["opened"]=true;
+                    if(!TryCustomize())return false;Require(editor.IsEditing && !menu.IsOpen,"Customize did not open from menu");evidence["opened"]=true;
                     editor.Adjust(GameplayHudIds.Actions,-48,-24,false);editor.Adjust(GameplayHudIds.Actions,32,24,true);phase=1;return true;
                 }
                 if(!editor.IsEditing && editor.HasRetainedDraft){
                     evidence["interrupted"]=true;
                     if(!editor.CanOpen){started=Time.realtimeSinceStartup;return false;}
-                    menu.Open();Submit("game-menu-customize-layout");
+                    if(!TryCustomize())return false;
                 }
                 if((phase==3 || phase==4) && !editor.CanOpen && !editor.IsEditing){started=Time.realtimeSinceStartup;return false;}
                 Require(Time.realtimeSinceStartup-started<20,"Layout UI timed out");
@@ -59,7 +67,7 @@ namespace Manaforge.Play
                     case 3:
                         Require(!editor.OwnsGeometry(GameplayHudIds.Actions) && !editor.HasRetainedDraft && !arena.Decisions.LayoutEditing,"Session recovery failed");evidence["reset"]=true;
                         if(!editor.CanOpen)return false;
-                        menu.Open();Submit("game-menu-customize-layout");editor.Adjust(GameplayHudIds.Actions,-48,-24,false);Submit("layout-editor-apply");Submit("layout-editor-cancel");phase=4;return true;
+                        if(!TryCustomize())return false;editor.Adjust(GameplayHudIds.Actions,-48,-24,false);Submit("layout-editor-apply");Submit("layout-editor-cancel");phase=4;return true;
                     case 4:
                         Require(!editor.IsEditing && editor.OwnsGeometry(GameplayHudIds.Actions),"Custom layout missing for full-game acceptance");
                         evidence["custom_gameplay"]=true;phase=5;return false;

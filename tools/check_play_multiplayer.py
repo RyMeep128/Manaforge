@@ -16,6 +16,7 @@ from mtg_play.live_game import LiveGameLaunch
 from mtg_play.multiplayer import new_code
 from mtg_play.multiplayer_runtime import run_host_game, run_guest_game
 from mtg_play.relay_client import RelayClient, LoopbackTunnel
+from mtg_play.recovery import atomic_json
 from mtg_proxy.constants import APP_VERSION
 from mtg_core.decks import Deck, DeckDocument, DeckEntry
 from check_play_unity_game import public_deck, public_commander_deck
@@ -43,6 +44,7 @@ class AcceptanceLaunch(LiveGameLaunch):
 
 
 class Acceptance(C.QObject):
+    progress = C.pyqtSignal(object)
     prepare = C.pyqtSignal(object, int)
     finished = C.pyqtSignal(str, object)
     failed = C.pyqtSignal(str)
@@ -51,6 +53,8 @@ class Acceptance(C.QObject):
         super().__init__()
         self.options, self.app = options, app
         self.cancel = threading.Event(); self.guest_finished = threading.Event()
+        self.guest_recovery = None
+        self.progress.connect(self.host_progress)
         self.results = {}; self.error = None; self.threads = []; self.tunnels = {}; self.port = None
         code = new_code(); self.host = RelayClient(options.relay, code, True, self, development=True); self.guest = RelayClient(options.relay, code, False, self, development=True)
         self.host.message_received.connect(lambda message: self.receive("host", message)); self.guest.message_received.connect(lambda message: self.receive("guest", message))
@@ -68,10 +72,16 @@ class Acceptance(C.QObject):
                 self.tunnels[side] = LoopbackTunnel(self.guest.payload, self.failed.emit)
                 port = self.tunnels[side].port
                 self.thread("guest", lambda: self.guest_game(payload, port))
+            elif payload["type"] == "match" and side == "guest":
+                self.guest_recovery = payload["recovery"]
             elif payload["type"] == "tunnel_open" and side == "host":
                 self.tunnels[side] = LoopbackTunnel(self.host.payload, self.failed.emit, target_port=self.port)
             elif payload["type"] == "frame":
                 self.tunnels[side].feed(payload)
+
+    def host_progress(self, value):
+        if isinstance(value, dict) and isinstance(value.get("recovery"), dict):
+            self.host.payload({"type": "match", "recovery": value["recovery"]})
 
     def remote(self, payload, port):
         self.port = port; self.host.payload(payload)
@@ -90,21 +100,28 @@ class Acceptance(C.QObject):
             host = public_deck(False)
             guest = DeckDocument(deck=Deck(name="Public relay defender", entries=[DeckEntry("forest", "Forest", 60, set_code="TRK", collector_number="325")]))
         setup = GameSetup((MatchSeat("one", "Host"), MatchSeat("two", "Guest")), format=format)
-        return run_host_game(setup, {"one": host, "two": guest}, self.cancel, lambda _: None, version=APP_VERSION, launch=AcceptanceLaunch(str(self.options.output) + ".host"), remote_prepare=self.prepare.emit, remote_finished=self.guest_finished, xmage_root=Path(self.options.xmage_root), jdk_path=Path(self.options.jdk_path), acceptance=True)
+        return run_host_game(setup, {"one": host, "two": guest}, self.cancel, self.progress.emit, version=APP_VERSION, launch=AcceptanceLaunch(str(self.options.output) + ".host"), remote_prepare=self.prepare.emit, remote_finished=self.guest_finished, xmage_root=Path(self.options.xmage_root), jdk_path=Path(self.options.jdk_path), acceptance=True)
 
     def guest_game(self, payload, port):
         # Separate client process/data directory preserves the real component ownership lock.
         with tempfile.TemporaryDirectory(prefix="manaforge-public-guest-") as data:
-            child = subprocess.Popen([sys.executable, __file__, "--guest", str(port)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env={**os.environ, "PRINT_PROXY_PREP_DATA_DIR": data, "MANAFORGE_ACCEPTANCE_DIAGNOSTICS": str(self.options.output) + ".guest"}, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            diagnostics = open(str(self.options.output) + ".guest-runner.log", "wb")
+            child = subprocess.Popen([sys.executable, __file__, "--guest", str(port)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=diagnostics, env={**os.environ, "PRINT_PROXY_PREP_DATA_DIR": data, "MANAFORGE_ACCEPTANCE_DIAGNOSTICS": str(self.options.output) + ".guest", "MANAFORGE_ACCEPTANCE_RECOVERY": str(Path(data) / "recovery.json")}, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
             try:
                 raw = json.dumps(payload).encode(); child.stdin.write(len(raw).to_bytes(4, "big") + raw); child.stdin.flush()
+                delivered = None
                 while child.poll() is None:
+                    state = self.guest_recovery
+                    if state is not None and state != delivered:
+                        atomic_json(Path(data) / "recovery.json", state)
+                        delivered = state
                     if self.cancel.wait(.1):
                         child.stdin.close(); child.wait(timeout=15); break
                 output = child.stdout.read(16384)
                 if child.returncode != 0: raise ValueError("MULTIPLAYER_GUEST_FAILED")
                 return json.loads(output)
             finally:
+                diagnostics.close()
                 if not child.stdin.closed: child.stdin.close()
                 if child.poll() is None:
                     try: child.wait(timeout=15)
@@ -127,10 +144,26 @@ def main():
         if not 1 <= size <= 16384: return 2
         payload = json.loads(stream.read(size)); cancel = threading.Event()
         def lifeline():
-            while stream.read(1): pass
+            while os.read(stream.fileno(), 1): pass
             cancel.set()
         threading.Thread(target=lifeline, daemon=True).start()
-        result = run_guest_game(payload, int(sys.argv[-1]), cancel, lambda _: None, launch=AcceptanceLaunch(os.environ["MANAFORGE_ACCEPTANCE_DIAGNOSTICS"]), acceptance=True)
+        launch = AcceptanceLaunch(os.environ["MANAFORGE_ACCEPTANCE_DIAGNOSTICS"])
+        def recovery_updates():
+            source = Path(os.environ["MANAFORGE_ACCEPTANCE_RECOVERY"])
+            delivered = None
+            while not cancel.wait(.1):
+                root = launch.root
+                if root is None or not (root / "recovery-state.json").is_file() or not source.is_file():
+                    continue
+                try:
+                    state = json.loads(source.read_text())
+                    if state != delivered:
+                        atomic_json(root / "recovery-state.json", state)
+                        delivered = state
+                except (OSError, json.JSONDecodeError):
+                    pass
+        threading.Thread(target=recovery_updates, daemon=True).start()
+        result = run_guest_game(payload, int(sys.argv[-1]), cancel, lambda _: None, launch=launch, acceptance=True)
         print(json.dumps(result)); return 0
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--relay", required=True)
