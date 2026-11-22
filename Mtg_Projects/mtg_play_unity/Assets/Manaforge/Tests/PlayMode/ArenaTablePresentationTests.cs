@@ -29,7 +29,7 @@ namespace Manaforge.Play.Tests
                 snapshot["objects"]=new JArray(attacker);snapshot["combat"]=new JArray(new JObject{["attackers"]=new JArray("attacker"),["blockers"]=new JArray(),["defender_id"]=defender,["blocked"]=false});
                 var ticket=table.Surface.BeginViewer(session,viewer);yield return null;yield return null;
                 Assert.That(table.Surface.TryPresent(ticket,ViewerCardProjection.ParseSnapshot(wire.ToString(),session,viewer,0,true)),Is.True);table.Present(ViewerDecisionProjection.ParseSnapshot(wire.ToString(),session,viewer,0,true));
-                var lines=root.Q<BattlefieldLinks>();var hud=root.Q<GameplayPlayerHud>();var players=root.Q<GameplayDrawer>("player-life-drawer");players.SetReducedMotion(true);
+                var lines=root.Q<BattlefieldLinks>();var hud=root.Q<GameplayPlayerHud>();var players=root.Q<GameplayDrawer>("player-life-drawer");players.SetReducedMotion(true);Assert.That(players.IsOpen,Is.False);players.SetOpen(true);
                 yield return new WaitForSecondsRealtime(.08f);yield return null;yield return null;Assert.That(lines.CurrentLinks.Count,Is.EqualTo(1));
                 Rect Destination(){var bounds=lines.WorldToLocal(hud.Player(defender).worldBound);bounds.xMin-=8;bounds.yMin-=8;bounds.xMax+=8;bounds.yMax+=8;return bounds;}
                 Assert.That(Destination().Contains(lines.CurrentLinks[0].To),Is.True,"Attack must point to its explicit defending player");var before=lines.CurrentLinks[0];
@@ -110,8 +110,8 @@ namespace Manaforge.Play.Tests
                 Assert.That(table.Surface.TryPresent(ticket,ViewerCardProjection.ParseSnapshot(wire.ToString(),session,viewer,0,true)),Is.True);table.Present(ViewerDecisionProjection.ParseSnapshot(wire.ToString(),session,viewer,0,true));yield return null;
                 var browser=root.Q<ZoneBrowser>();var back=root.Q<Button>("close-public-zone");
                 var turns=root.Q<GameplayDrawer>("turns-panel");Assert.That(table.HudRegistry.Find(GameplayHudIds.Turns).Element,Is.SameAs(turns));Assert.That(turns.Content.Contains(root.Q("table-phase-strip")),Is.True);Assert.That(turns.Content.Contains(root.Q("table-phase")),Is.True);
-                Assert.That(root.Q<Button>("close-turns-panel"),Is.Null);using(var submit=NavigationSubmitEvent.GetPooled()){submit.target=turns.Tab;turns.Tab.SendEvent(submit);}yield return null;Assert.That(turns.IsOpen,Is.False);
-                using(var submit=NavigationSubmitEvent.GetPooled()){submit.target=turns.Tab;turns.Tab.SendEvent(submit);}yield return null;Assert.That(turns.IsOpen,Is.True);
+                Assert.That(root.Q<Button>("close-turns-panel"),Is.Null);Assert.That(turns.IsOpen,Is.False);using(var submit=NavigationSubmitEvent.GetPooled()){submit.target=turns.Tab;turns.Tab.SendEvent(submit);}yield return null;Assert.That(turns.IsOpen,Is.True);
+                using(var submit=NavigationSubmitEvent.GetPooled()){submit.target=turns.Tab;turns.Tab.SendEvent(submit);}yield return null;Assert.That(turns.IsOpen,Is.False);
                 Assert.That(table.BrowsePublicZone("graveyard",viewer),Is.True);yield return null;
                 // Reproduce a passive preview covering the close button: descendants must all pass input through.
                 var preview=table.Surface.InspectionView;var previewClose=root.Q<Button>("close-inspection");
