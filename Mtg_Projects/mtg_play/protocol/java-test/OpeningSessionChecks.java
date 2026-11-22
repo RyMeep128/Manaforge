@@ -30,7 +30,7 @@ public final class OpeningSessionChecks {
         try(ManaforgeOpeningSession owner=new ManaforgeOpeningSession(context,projection,envelope(interactive).toString())){
             String pending=OpeningProjectionChecks.perform(interactive);
             if(!owner.dispatch(pending,"raw-game","raw-human",41,8).shouldSubmit || owner.pollNative()==null)throw new AssertionError("PENDING_PRIORITY_MISSING");
-            JsonObject waiting=projection.projectCoreObservation(before);owner.observe(envelope(waiting).toString());
+            JsonObject waiting=projection.projectCoreObservation(before),update=envelope(waiting);update.addProperty("message_id","pending-concession-observation");owner.observe(update.toString());
             JsonObject request=JsonParser.parseString(pending).getAsJsonObject();request.addProperty("message_id","interrupt-concession");JsonObject body=request.getAsJsonObject("body");body.remove("decision_id");body.remove("action_id");body.addProperty("operation","concede");body.add("revision",waiting.get("revision"));
             if(!owner.dispatch(request.toString(),"raw-game","raw-human",0,8).shouldSubmit)throw new AssertionError("CONCESSION_BLOCKED_BY_PRIORITY_RECEIPT");
             JsonObject command=owner.pollNative();if(command==null || !"concede".equals(command.get("command").getAsString()))throw new AssertionError("CONCESSION_NOT_QUEUED");

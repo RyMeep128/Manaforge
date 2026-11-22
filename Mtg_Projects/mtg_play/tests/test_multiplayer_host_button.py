@@ -14,7 +14,7 @@ def test_finished_or_crashed_game_keeps_the_existing_lobby(tmp_path, outcome):
     script = textwrap.dedent(
         f"""
         import sys
-        sys.path[:0] = [{str(products)!r}, {str(products / 'mtg_core')!r}, {str(products / 'mtg_play/tests')!r}]
+        sys.path[:0] = [{str(products)!r}, {str(products / "mtg_core")!r}, {str(products / "mtg_play/tests")!r}]
         from PyQt6 import QtWidgets as W
         from mtg_play.workspace import PlayWorkspace
         from mtg_play.multiplayer import MultiplayerLobby
@@ -59,8 +59,15 @@ def test_finished_or_crashed_game_keeps_the_existing_lobby(tmp_path, outcome):
         """
     )
     completed = subprocess.run(
-        [sys.executable, "-I", "-c", script], capture_output=True, text=True, timeout=20,
-        env={**os.environ, "QT_QPA_PLATFORM": "offscreen", "PRINT_PROXY_PREP_DATA_DIR": str(tmp_path)},
+        [sys.executable, "-I", "-c", script],
+        capture_output=True,
+        text=True,
+        timeout=20,
+        env={
+            **os.environ,
+            "QT_QPA_PLATFORM": "offscreen",
+            "PRINT_PROXY_PREP_DATA_DIR": str(tmp_path),
+        },
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
     assert "LOBBY_RETAINED" in completed.stdout

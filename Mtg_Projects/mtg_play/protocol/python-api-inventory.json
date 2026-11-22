@@ -954,6 +954,18 @@
         "python_type": "str | None",
         "required": false,
         "python_default": "None"
+      },
+      {
+        "name": "priority_hints",
+        "python_type": "tuple[Literal['own_stack', 'self_leaves', 'final_saga', 'untap_resources', 'draw_hazard', 'copy_spell'], ...] | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "priority_object_id",
+        "python_type": "str | None",
+        "required": false,
+        "python_default": "None"
       }
     ],
     "GameEvent": [

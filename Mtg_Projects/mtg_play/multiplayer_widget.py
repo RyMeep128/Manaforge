@@ -242,7 +242,8 @@ class MultiplayerPanel(W.QWidget):
                     "version": APP_VERSION,
                     "adapter": ADAPTER_VERSION,
                     "lobby": self.view,
-                }, self.guest_peer
+                },
+                self.guest_peer,
             )
         self.render()
 
@@ -433,9 +434,16 @@ class MultiplayerPanel(W.QWidget):
                     if first and self.selectors[1].currentData() is not None:
                         self.select_deck(1)
                 elif kind == "return_to_lobby" and not self.hosting:
-                    self.return_to_lobby(payload.get("message", "Game ended. Ready up for another game."), notify=False)
+                    self.return_to_lobby(
+                        payload.get(
+                            "message", "Game ended. Ready up for another game."
+                        ),
+                        notify=False,
+                    )
                 elif kind == "game_interrupted" and self.hosting and self.started:
-                    self.return_to_lobby("Game interrupted. The lobby and decks have been kept.")
+                    self.return_to_lobby(
+                        "Game interrupted. The lobby and decks have been kept."
+                    )
                 elif kind == "prepare" and not self.hosting and not self.busy:
                     self.start_guest(payload)
                 elif kind == "recovery_ended" and not self.hosting:
@@ -825,14 +833,19 @@ class MultiplayerPanel(W.QWidget):
                 return
             if (self.recovery_state or {}).get("ended"):
                 self.normal_result = True
-                self.return_to_lobby("The host ended the game without a winner. Ready up for another game.")
+                self.return_to_lobby(
+                    "The host ended the game without a winner. Ready up for another game."
+                )
                 return
             self.normal_result = outcome in ("win", "loss", "draw")
             if not self.normal_result:
                 if not self.hosting and self.started:
                     if self.relay and not self.relay.closed:
                         self.relay.payload({"type": "game_interrupted"})
-                        self.return_to_lobby("Game interrupted. Waiting for the host to reset the lobby.", notify=False)
+                        self.return_to_lobby(
+                            "Game interrupted. Waiting for the host to reset the lobby.",
+                            notify=False,
+                        )
                     else:
                         self.connection_lost()
                     return
@@ -850,9 +863,13 @@ class MultiplayerPanel(W.QWidget):
                     {"type": "finished"}, self.guest_peer if self.hosting else None
                 )
             if self.hosting:
-                self.return_to_lobby("Game result: " + outcome + ". Ready up for another game.")
+                self.return_to_lobby(
+                    "Game result: " + outcome + ". Ready up for another game."
+                )
             else:
-                self.message.setText("Game result: " + outcome + ". Waiting for the host's lobby.")
+                self.message.setText(
+                    "Game result: " + outcome + ". Waiting for the host's lobby."
+                )
                 self.render()
 
     @C.pyqtSlot(str)
@@ -886,7 +903,12 @@ class MultiplayerPanel(W.QWidget):
         if self.started and self.relay and not self.relay.closed:
             if not self.hosting:
                 self.relay.payload({"type": "game_interrupted"})
-            self.return_to_lobby("Game interrupted: " + code.replace("_", " ").lower() + ". The lobby and decks have been kept.", notify=self.hosting)
+            self.return_to_lobby(
+                "Game interrupted: "
+                + code.replace("_", " ").lower()
+                + ". The lobby and decks have been kept.",
+                notify=self.hosting,
+            )
             return
         if not self.hosting and self.started:
             self.connection_lost()
@@ -935,7 +957,9 @@ class MultiplayerPanel(W.QWidget):
             self.view = self.model.public()
             if self.relay and not self.relay.closed:
                 if notify:
-                    self.relay.payload({"type": "return_to_lobby", "message": message}, self.guest_peer)
+                    self.relay.payload(
+                        {"type": "return_to_lobby", "message": message}, self.guest_peer
+                    )
                 self.send_lobby()
         elif self.view:
             self.view = deepcopy(self.view)
