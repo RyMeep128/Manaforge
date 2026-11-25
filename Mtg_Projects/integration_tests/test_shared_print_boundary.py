@@ -31,6 +31,8 @@ from mtg_print.models import ProjectState
 from mtg_print import library
 from mtg_print import image, high_res, runtime_images, deck_import
 from mtg_print.services import deck_import_service, high_res_service
+from mtg_print import set_inventory
+from mtg_print.services import set_print_service
 from mtg_editor.proxy_adapter import prepare_print
 from mtg_core.decks import DeckDocument, DeckEntry
 

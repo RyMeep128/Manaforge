@@ -191,6 +191,10 @@ class _PrintApplicationState:
         if hasattr(self, "_window"):
             self._window.open_blank_editor()
 
+    def print_set(self):
+        if hasattr(self, "_window"):
+            self._window.print_set()
+
     def resume_draft(self):
         if hasattr(self, "_window"):
             self._window.resume_draft()
@@ -618,6 +622,18 @@ class AppShellWindow(QMainWindow):
                 "img_dict": img_dict,
             },
         )
+
+    def print_set(self):
+        from mtg_ui.print_set_dialog import PrintSetDialog
+        if not self._leave_active_session():
+            return
+        dialog = PrintSetDialog(self)
+        accepted = dialog.exec() == QDialog.DialogCode.Accepted
+        entry = dialog.project_entry
+        dialog.deleteLater()
+        if accepted and entry:
+            self._dashboard_page.refresh_projects()
+            self.open_managed_project(entry['id'])
 
     def resume_draft(self):
         if not project_library.draft_has_user_content():

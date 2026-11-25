@@ -3,6 +3,11 @@ required-version = "==0.16.9"
 target-version = "py312"
 line-length = 88
 include = [
+    "Mtg_Projects/mtg_core/mtg_core/set_catalog.py",
+    "Mtg_Projects/mtg_print/set_inventory.py",
+    "Mtg_Projects/mtg_print/services/set_print_service.py",
+    "Mtg_Projects/mtg_ui/print_set_dialog.py",
+    "Mtg_Projects/mtg_proxy/tests/test_print_set.py",
     "Mtg_Projects/mtg_play/*.py",
     "Mtg_Projects/mtg_play/tests/*.py",
     "Mtg_Projects/mtg_core/mtg_core/artwork_storage.py",

@@ -95,6 +95,7 @@ namespace Manaforge.Play
         {
             var offer=panel.CurrentOffer;var frame=offer?.Frame;var state=panel.Priority.Current;
             bool yielding=panel.Presentation?.Compact==true;
+            bool automatic=panel.AutomaticPriorityPending && !state.Paused && !yielding && !panel.PriorityControlsOpen && !panel.LayoutEditing;
             bool priority=frame?.Decision?.IsPriority==true;
             if(priority)HasPresented=true;
             bool canPass=panel.CanPassPriority;
@@ -104,9 +105,11 @@ namespace Manaforge.Play
             }
             alternatives.SetEnabled(canPass && !yielding);settings.SetEnabled(!panel.LayoutEditing);
             more.SetEnabled(canPass && !panel.PriorityControlsOpen && !yielding && !state.Paused);yieldTurn.SetEnabled(canPass);yieldStack.SetEnabled(canPass);yieldEnd.SetEnabled(canPass && frame?.ActivePlayerId==frame?.Context.ViewerId);yieldResolve.SetEnabled(canPass && frame?.StackIds.Count>0);
-            if(!canPass || yielding)yieldMenu.style.display=DisplayStyle.None;
-            string text=state.Paused?"Automatic passing paused. Resume when ready.":yielding?panel.Presentation.Text:!priority?"Waiting for opponent…":!offer.CanSubmit || panel.PriorityCommandPending?"Passing priority…":frame.StackIds.Count>0?"Respond to the stack, or resolve the next object.":"Play an available card or ability, or continue.";
-            StableStatusText.Set(detail,text,state.Paused);
+            if(!canPass || yielding || automatic)yieldMenu.style.display=DisplayStyle.None;
+            primary.style.display=secondary.style.display=more.style.display=automatic?DisplayStyle.None:DisplayStyle.Flex;
+            alternatives.style.display=automatic?DisplayStyle.None:DisplayStyle.Flex;
+            string text=state.Paused?"Automatic passing paused. Resume when ready.":yielding?panel.Presentation.Text:automatic?"Passing priority…":!priority?"Waiting for opponent…":!offer.CanSubmit || panel.PriorityCommandPending?"Passing priority…":frame.StackIds.Count>0?"Respond to the stack, or resolve the next object.":state.Reason=="Floating mana: continue when ready"?"You have floating mana. Continue when ready.":"Play an available card or ability, or continue.";
+            StableStatusText.Set(detail,text,true);
             string floating=frame?.ViewerMana==null?"":string.Join(", ",frame.ViewerMana.Where(pair=>pair.Value>0).Select(pair=>pair.Key+" "+pair.Value));
             mana.text=string.IsNullOrEmpty(floating)?"":"Mana: "+floating;
             // Keep the last label through offer gaps; only availability changes immediately.

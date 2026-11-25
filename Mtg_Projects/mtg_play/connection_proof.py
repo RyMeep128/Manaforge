@@ -20,11 +20,13 @@ import xml.etree.ElementTree as ET
 if __package__:
     from .engine_fork import selected_bundle
     from .runtime_distribution import bridge_classes, component_root, owned
+    from .session_storage import prune_sessions
 else:
     products = Path(__file__).resolve().parents[1]
     sys.path[:0] = [str(products), str(products / "mtg_core")]
     from mtg_play.engine_fork import selected_bundle
     from mtg_play.runtime_distribution import bridge_classes, component_root, owned
+    from mtg_play.session_storage import prune_sessions
 HERE = Path(__file__).resolve().parent
 DEFAULT_BUNDLE = selected_bundle(HERE / "mage-full_1.4.62-dev_2026-10-03_20-47")
 DEFAULT_JDK = Path(r"C:\Program Files\Java\jdk-23")
@@ -358,6 +360,7 @@ def run_proof(
         diagnostics = LifecycleDiagnostics()
     with diagnostics.stage("runtime_validation"):
         java, javac, manifest = validate_installation(bundle, jdk)
+    storage_failures = prune_sessions(component_root() / "sessions")
     workspace = (
         component_root()
         / "sessions"
@@ -369,6 +372,8 @@ def run_proof(
         "workspace": str(workspace),
         "engine": manifest["engine"],
     }
+    if storage_failures:
+        result["storage_cleanup_failed"] = storage_failures
     compiler_process = server_process = bridge_process = events = None
     logs = []
     peers = []
@@ -668,6 +673,15 @@ def run_proof(
         except OSError:
             # Do not discard process-exit evidence if diagnostic storage fails.
             result["diagnostics_write_failed"] = True
+        storage_failures = prune_sessions(workspace.parent)
+        if storage_failures:
+            result["storage_cleanup_failed"] = storage_failures
+            try:
+                (workspace / "result.json").write_text(
+                    json.dumps(result, indent=2) + "\n", encoding="utf-8"
+                )
+            except OSError:
+                result["diagnostics_write_failed"] = True
     return result
 
 

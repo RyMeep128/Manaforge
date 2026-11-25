@@ -8,7 +8,7 @@ Wizards describes Arena's ordinary automatic passing, own-upkeep/end-step skippi
 
 Before this change, Unity delayed each automatic pass by 350 ms, skipped all beginning-phase responses, supported only persistent Manual Control, and applied every stop on both players' turns. The older Qt controls described in play-priority-control.md were not the active Unity implementation.
 
-The policy follows Arena-style defaults: own upkeep/draw/end-step and own-stack response windows normally advance, while empty own main phases await explicit progress. Opponent spells still offer responses during normally skipped own steps. Native Smart Priority facts restore important exceptions without a production card-name allowlist. Unknown or incomplete response information holds. The 99% parity target is a product goal, not a measured result; unpublished Arena behavior and long-tail mechanics require comparative gameplay evidence.
+The policy follows Arena-style defaults: own upkeep/draw/end-step and own-stack response windows normally advance, while own main phases advance when the complete engine action list contains only passing or basic mana activations. Available land plays, spells, other abilities, options, or floating mana keep an own main phase open. Opponent spells still offer responses during normally skipped own steps. Native Smart Priority facts restore important exceptions without a production card-name allowlist. Unknown or incomplete response information holds. The 99% parity target is a product goal, not a measured result; unpublished Arena behavior and long-tail mechanics require comparative gameplay evidence.
 
 ## Controls
 
@@ -24,7 +24,7 @@ Keyboard commands do not answer required choices and are suppressed for text ent
 
 ## Scheduling and failure behavior
 
-The per-opportunity timer is removed. After presentation holds, the next Unity tick may claim exactly one engine pass. Dispatch still checks current offer identity, revision, viewer, submission reservation, and command acknowledgement. The scheduler never loops over imagined future opportunities. Required targeting, combat, payments, ordering, numeric input, and ability selections are never automatically answered by this policy.
+The per-opportunity timer is removed. The next eligible Unity tick may claim exactly one engine pass. The normal Arena view no longer waits for a new-stack attention timer or decorative animations; these effects overlap gameplay and retain their bounded queues. Automatically consumed opportunities show passive passing status rather than actionable Next / Pass / Resolve controls. Real response windows and required choices restore their controls immediately. Explicit yields retain cancellation controls, and stops and settings remain accessible. Dispatch still checks current offer identity, revision, viewer, submission reservation, and command acknowledgement. The scheduler never loops over imagined future opportunities. Required targeting, combat, payments, ordering, numeric input, and ability selections are never automatically answered by this policy.
 
 Flow: Unity panel -> ViewerCommandDispatcher / ViewerDecisionBinding -> ClientSessionChannel reservation and serialized write -> Java OpeningSession / GatewaySessionBoundary / SubmissionLedger -> projection claim -> GameplaySession -> bridge native response -> XMage -> native evidence and acknowledgement -> fresh projected offer. Observation snapshots carry no decision authority.
 
@@ -51,7 +51,7 @@ The host reads presentation facts under the existing native pause/cycle guard. `
 | Situation | Behavior |
 |---|---|
 | Ordinary own upkeep, draw, end step, or response to own object | Advance unless an override or smart exception applies |
-| Empty own first or second main phase | Hold for explicit Next or a selected yield |
+| Own first or second main phase, empty stack | Advance with complete pass-only/basic-mana-only actions; hold for an available play, option, or floating mana |
 | Opponent spell/ability on the stack | Offer meaningful responses on either player's turn |
 | Own trigger will sacrifice/exile its source | Preserve a meaningful response before it leaves |
 | Final Saga chapter | Hold available actions, including basic mana, before the source is lost |
@@ -68,3 +68,9 @@ Typed native abilities and effect families cover source departure and Saga chapt
 Coverage includes both turns, ordinary versus explicit passing, native smart facts, own/opponent stack additions, phase and step stops, temporary-control boundaries, one-time/repeating stops, cancellation during observation gaps, stale decisions, required choices, floating mana, and end-step arrivals. Native probes cover generic sacrifice effects and real Saga, untap, draw-hazard, escape-sacrifice, and copy-spell abilities; they execute on hosted non-Unity CI only.
 
 For a diagnostic-only acceptance correction, `./tools/validate_unity_local.ps1 -ResumeAt authenticated-ui` rebuilds the Windows player and runs the authenticated fixture plus remaining multiplayer stages. `-ResumeAt multiplayer` starts at relay acceptance. Reports explicitly mark earlier stages skipped; these continuations must be read alongside prior evidence and never produce a full release acceptance archive.
+
+## Fast-flow regression acceptance
+
+Unity policy regressions cover both main phases, basic-mana-only actions, land/spell/ability plays, options, floating and zero mana, incomplete action information, and Full Control / scoped stops. Authenticated dispatch regressions cover first-tick automatic passing, passive controls restoring a real response, consecutive confirmed main-phase offers, and active Arena animations / stack arrivals without a command delay or duplicate pass. The existing optional presentation guard remains available to other hosts; the normal Arena view does not bind it to decorative effects.
+
+Use the local validation report for actual execution evidence. Automated human-seat acceptance uses opt-in fixture drivers; it does not establish manual Arena comparison or complete behavioral parity.

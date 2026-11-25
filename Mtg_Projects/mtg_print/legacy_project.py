@@ -115,7 +115,9 @@ def init_dict(print_dict, img_dict, warn_fn=None):
     for img in list(state.cards.keys()):
         parsed_metadata = _parse_scryfall_card_metadata(img)
         if parsed_metadata is not None:
-            state.set_card_metadata(img, parsed_metadata)
+            existing_metadata = state.get_card_metadata(img) or {}
+            state.set_card_metadata(img, {**parsed_metadata, **{
+                key: value for key, value in existing_metadata.items() if value is not None}})
 
     img_dict.clear()
     img_cache = state.img_cache

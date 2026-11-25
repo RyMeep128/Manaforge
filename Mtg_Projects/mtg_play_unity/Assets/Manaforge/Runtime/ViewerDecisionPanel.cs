@@ -26,6 +26,7 @@ namespace Manaforge.Play
         private GameplayPriorityActions priorityActions;
         internal bool UnifiedPriorityActions=>priorityActions!=null;
         internal bool PriorityCommandPending=>pending!=null;
+        internal bool AutomaticPriorityPending {get;private set;}
         internal bool PrioritySessionActive=>!disposed && host.Authenticated && !host.Completion.IsCompleted;
         internal bool CanPassPriority {get{var frame=offer?.Frame;return PrioritySessionActive && !LayoutEditing && pending==null && frame?.Decision?.IsPriority==true && ReferenceEquals(offer,host.PresentedDecision) && offer.CanSubmit && frame.Decision.Family=="selection" && frame.Decision.Groups.Count==0 && frame.Decision.PlayerId==frame.Context.ViewerId && frame.PriorityPlayerId==frame.Context.ViewerId && frame.Status=="active" && frame.Result==null && frame.Actions.Count(action=>action.Kind=="pass" && action.ObjectId==null)==1;}}
         private float continuityUntil;private YieldPresentation displayPresentation;
@@ -153,6 +154,8 @@ namespace Manaforge.Play
             }
             if(host.Completion.IsCompleted){Priority.Suspend();autoAfter=-1;}
             Priority.Observe(frame);
+            var automatic=priorityEnabled?Priority.Evaluate(frame):null;
+            AutomaticPriorityPending=automatic!=null || frame?.Decision?.IsPriority==true && Priority.Current.Attempted.Contains(frame.Decision.DecisionId);
             Presentation=YieldPresentation.Resolve(Priority.Current,frame,PriorityControlsOpen,host.Completion.IsCompleted);
             bool bridge=offer==null && !host.Completion.IsCompleted && Time.unscaledTime<continuityUntil;
             if(!bridge || displayPresentation==null)displayPresentation=Presentation;
@@ -186,7 +189,6 @@ namespace Manaforge.Play
             numericSubmit?.SetEnabled(TryNumbers(out _,false));
             controls.Q<Button>("decision-pass-turn")?.SetEnabled(offer.CanSubmit && pending==null && !Priority.Current.Paused);
             if(!offer.CanSubmit && pending==null && string.IsNullOrEmpty(status.text))status.text="Waiting for the game.";
-            var automatic=priorityEnabled?Priority.Evaluate(frame):null;
             if(automatic==null || pending!=null || !offer.CanSubmit || PriorityControlsOpen || LayoutEditing || PresentationHold?.Invoke()==true){autoAfter=-1;return;}
             if(autoAfter<0)autoAfter=Time.unscaledTime;
             if(Time.unscaledTime>=autoAfter){

@@ -160,7 +160,10 @@ namespace Manaforge.Play
         {
             var response=Responses(frame);bool own=frame.ActivePlayerId==frame.Context.ViewerId;
             if(response==PriorityResponse.Unknown)return "Response information unavailable";
-            if(own && frame.StackIds.Count==0 && (frame.Step=="PRECOMBAT_MAIN" || frame.Step=="POSTCOMBAT_MAIN"))return "Main phase";
+            if(own && frame.StackIds.Count==0 && (frame.Step=="PRECOMBAT_MAIN" || frame.Step=="POSTCOMBAT_MAIN")){
+                if(frame.ViewerMana?.Any(amount=>amount.Value>0)==true)return "Floating mana: continue when ready";
+                return response==PriorityResponse.Yes?"Main phase":null;
+            }
             bool action=frame.Actions.Any(item=>item.Kind!="pass") || frame.Decision.Options.Count>0;
             bool ownArrival=Current.EndStepOwnArrival && frame.Actions.Any(item=>item.Kind=="activate" && item.ObjectId!=null && Current.EndStepArrivedSources.Contains(item.ObjectId)),opponentArrival=Current.EndStepOpponentArrival;
             Current.EndStepOwnArrival=Current.EndStepOpponentArrival=false;Current.EndStepArrivedSources.Clear();

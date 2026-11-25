@@ -459,7 +459,7 @@ def _initial_project_dict(project_path):
     return state.to_persisted_dict()
 
 
-def create_project(display_name=None):
+def create_project(display_name=None, *, prepared_state=None):
     data = load_library()
     display_name = display_name or _default_display_name()
     project_id = str(uuid.uuid4())
@@ -473,7 +473,8 @@ def create_project(display_name=None):
         "last_opened_at": timestamp,
         "thumbnail_card": None,
     }
-    write_json_atomic(path, _initial_project_dict(path), ensure_ascii=False)
+    write_json_atomic(path, (as_project_state(prepared_state).to_persisted_dict()
+                            if prepared_state is not None else _initial_project_dict(path)), ensure_ascii=False)
     data["projects"].append(entry)
     save_library(data)
     return entry

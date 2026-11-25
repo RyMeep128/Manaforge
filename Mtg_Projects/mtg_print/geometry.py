@@ -8,6 +8,16 @@ card_ratio = card_size_without_bleed_inch[0] / card_size_without_bleed_inch[1]
 low_dpi_warning_threshold = 300
 
 
+def sheet_capacity(state):
+    """Use the same physical card dimensions for summaries and print editing."""
+    width, height = page_sizes[state.pagesize]
+    if state.orient == 'Landscape':
+        width, height = height, width
+    bleed = max(0, float(state.bleed_edge)) / 25.4
+    card_width, card_height = (72 * (v + 2 * bleed) for v in card_size_without_bleed_inch)
+    return int(width // card_width), int(height // card_height)
+
+
 def mm_to_inch(mm):
     return mm * 0.0393701
 

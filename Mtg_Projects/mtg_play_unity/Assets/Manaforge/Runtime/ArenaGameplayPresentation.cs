@@ -14,7 +14,7 @@ namespace Manaforge.Play
         private readonly VisualElement stackPanel,stackBackdrop,stackToolbar,stackCards;
         private long stackForegroundOrder;
         private readonly Button stackToggle,resolveNext,resolveAll;
-        private bool stackFocused;private float stackAttentionUntil;
+        private bool stackFocused;
         private readonly System.Collections.Generic.HashSet<string> seenStack=new System.Collections.Generic.HashSet<string>();
         private readonly GameplayZonePanel zonePanel;private readonly GameplayDrawer actionDrawer,priorityDrawer,zonePanelDrawer,turnsDrawer;private GameplayActionDrawer actionBinding;private GameplayPriorityDrawer priorityBinding;private string openZone,openZoneOwner,previewId;private bool previewing;
         private string dismissedZoneDecision;
@@ -78,7 +78,7 @@ namespace Manaforge.Play
             stackTitle=new Label{name="stack-title",enableRichText=false};stackTitle.style.position=Position.Relative;stackTitle.style.top=0;stackTitle.style.right=0;stackTitle.style.width=StyleKeyword.Auto;stackTitle.style.flexGrow=1;stackToolbar.Add(stackTitle);
             stackToggle=new Button(()=>{stackFocused=!stackFocused;stackForegroundOrder=GameplayDrawer.NextForegroundOrder();Layout();}){name="stack-focus-toggle",text="Minimize"};stackToolbar.Add(stackToggle);GameplayTheme.Button(stackToggle);
             resolveNext=new Button(()=>{if(Decisions?.Presentation?.Compact==true)Decisions.CancelPriorityYield();else Decisions?.TryPassPriority();RefreshStackControls();}){name="stack-resolve-next",text="Resolve next"};stackToolbar.Add(resolveNext);GameplayTheme.Button(resolveNext,true);
-            resolveAll=new Button(()=>{if(Decisions==null)return;if(Decisions.Priority.Current.Yield=="resolve-stack")Decisions.CancelPriorityYield();else if(CanResolveStack()){Decisions.Priority.BeginYield("resolve-stack",Decisions.PriorityFrame);stackAttentionUntil=0;}Decisions.PrioritySettingsChanged();RefreshStackControls();}){name="stack-resolve-all",text="Resolve All"};stackToolbar.Add(resolveAll);GameplayTheme.Button(resolveAll,true);stackToolbar.style.display=DisplayStyle.None;
+            resolveAll=new Button(()=>{if(Decisions==null)return;if(Decisions.Priority.Current.Yield=="resolve-stack")Decisions.CancelPriorityYield();else if(CanResolveStack()){Decisions.Priority.BeginYield("resolve-stack",Decisions.PriorityFrame);}Decisions.PrioritySettingsChanged();RefreshStackControls();}){name="stack-resolve-all",text="Resolve All"};stackToolbar.Add(resolveAll);GameplayTheme.Button(resolveAll,true);stackToolbar.style.display=DisplayStyle.None;
             stackTitle.style.fontSize=13;stackTitle.style.minWidth=60;
             foreach(var control in new[]{stackToggle,resolveNext,resolveAll}){control.style.height=control.style.minHeight=30;control.style.fontSize=13;control.style.marginTop=control.style.marginBottom=0;control.style.paddingTop=control.style.paddingBottom=4;control.style.paddingLeft=control.style.paddingRight=8;}
             actionDrawer=new GameplayDrawer("Actions",GameplayDrawerDirection.Right){name="action-drawer"};root.Add(actionDrawer);
@@ -162,7 +162,7 @@ namespace Manaforge.Play
         private void ClearZoneResources()
         {
             ResetAmountPopup();focusRefresh?.Pause();focusRefresh=null;StableStatusText.Set(status,status.text,true);cardScrolling?.Dispose();stackScrolling?.Dispose();organizationRenderer?.Clear();LayoutEditor?.EndSession();
-            seenStack.Clear();stackFocused=false;stackForegroundOrder=0;stackAttentionUntil=0;stackPanel.style.display=stackCards.style.display=stackToolbar.style.display=stackBackdrop.style.display=DisplayStyle.None;hud?.ClearPresentation();ClearCardFocus();inspecting=false;inspector?.Hide(false);CloseInspection();openZone=openZoneOwner=null;opponentHand.Clear();animations?.Clear();links.MarkDirtyRepaint();
+            seenStack.Clear();stackFocused=false;stackForegroundOrder=0;stackPanel.style.display=stackCards.style.display=stackToolbar.style.display=stackBackdrop.style.display=DisplayStyle.None;hud?.ClearPresentation();ClearCardFocus();inspecting=false;inspector?.Hide(false);CloseInspection();openZone=openZoneOwner=null;opponentHand.Clear();animations?.Clear();links.MarkDirtyRepaint();
             zoneDrawer?.ClearBinding();
             root.RemoveFromClassList("browsing-public-zone");frame=null;dismissedZoneDecision=null;rowPages.Clear();handOrder.Clear();
             zonePanel.ClearBinding();if(actionBinding!=null)actionBinding.Reset();else actionDrawer.Reset();priorityDrawer.Reset();zonePanelDrawer.Reset();turnsDrawer.Reset();
@@ -211,7 +211,7 @@ namespace Manaforge.Play
         public void CloseInspection()=>CloseInspection(true);
         private void CloseInspection(bool restoreFocus){originalCard.style.display=DisplayStyle.None;Surface.InspectionView.SetOriginalPrinting(false);bool restore=inspecting && restoreFocus;inspecting=false;previewing=false;previewId=null;restoringFocus=true;try{inspector?.Hide(restore);}finally{restoringFocus=false;}}
         public void Bind(ViewerSessionHost value)
-        {if(Decisions!=null)throw new InvalidOperationException("PRESENTATION_ALREADY_BOUND");host=value;Decisions=new ViewerDecisionPanel(choices,host);Decisions.PresentationHold=()=>animations.HoldAutomaticPassing || Time.unscaledTime<stackAttentionUntil;Decisions.SetSpatialPresentation(true);Decisions.UseUnifiedPriorityActions(()=>priorityDrawer.SetOpen(true,true));Decisions.SetChoicePreview(Surface.ChoicePreview);Decisions.SetChoiceArtworkState(()=>Surface.PresentedArtworkCount);Surface.Rebinding+=Decisions.InvalidateAmountArtwork;actionBinding=new GameplayActionDrawer(actionDrawer,Decisions);priorityBinding=new GameplayPriorityDrawer(priorityDrawer,Decisions);targeting=new ViewerTargetingController(root,Surface,Decisions,()=>hud.Players,ResolveCardAnchor);boardInput=new ViewerBoardInput(root,Surface,host,Decisions,GameplayTheme.Menu);
+        {if(Decisions!=null)throw new InvalidOperationException("PRESENTATION_ALREADY_BOUND");host=value;Decisions=new ViewerDecisionPanel(choices,host);Decisions.SetSpatialPresentation(true);Decisions.UseUnifiedPriorityActions(()=>priorityDrawer.SetOpen(true,true));Decisions.SetChoicePreview(Surface.ChoicePreview);Decisions.SetChoiceArtworkState(()=>Surface.PresentedArtworkCount);Surface.Rebinding+=Decisions.InvalidateAmountArtwork;actionBinding=new GameplayActionDrawer(actionDrawer,Decisions);priorityBinding=new GameplayPriorityDrawer(priorityDrawer,Decisions);targeting=new ViewerTargetingController(root,Surface,Decisions,()=>hud.Players,ResolveCardAnchor);boardInput=new ViewerBoardInput(root,Surface,host,Decisions,GameplayTheme.Menu);
             if(Capabilities.SharedOrganization)organizationRenderer=new BattlefieldOrganizationRenderer(root,host,Layout,()=>{boardInput.InterruptGesture();targeting.InterruptGesture();},()=>LayoutEditor?.IsEditing==true || Decisions.LayoutEditing || host.PendingReveal!=null || inspecting || openZone!=null,
                 id=>{var offered=host.PresentedDecision;var current=offered?.Frame;return offered?.CanSubmit==true && current?.Decision!=null && (current.Decision.Family=="mana"?current.ManaSourceReferences.Any(source=>source.ObjectId==id):Decisions.ObjectChoiceCount(offered,id)>0);},
                 ()=>LayoutEditor?.IsEditing==true || Decisions.SuppressSpatialInput || Decisions.IsLibraryOrdering || host.PendingReveal!=null || openZone!=null,RefreshForegroundLayers);
@@ -277,8 +277,8 @@ namespace Manaforge.Play
             }
             bool newStack=value.StackIds.Any(id=>!seenStack.Contains(id));
             seenStack.Clear();foreach(string id in value.StackIds)seenStack.Add(id);
-            if(newStack){stackFocused=true;stackForegroundOrder=GameplayDrawer.NextForegroundOrder();stackAttentionUntil=Time.unscaledTime+.9f;rowPages["stack"]=0;}
-            if(value.StackIds.Count==0){stackFocused=false;stackAttentionUntil=0;}
+            if(newStack){stackFocused=true;stackForegroundOrder=GameplayDrawer.NextForegroundOrder();rowPages["stack"]=0;}
+            if(value.StackIds.Count==0){stackFocused=false;}
             frame=value;if(frame.Decision?.Family=="amounts" && amountDecision!=frame.Decision.DecisionId && openZone!=null){openZone=openZoneOwner=null;zoneDrawer.ClearBinding();}targeting?.Observe(value);
             string viewer=frame.Context.ViewerId;
             UpdateOpponentHand(OpponentId());
@@ -291,7 +291,7 @@ namespace Manaforge.Play
             OpenOfferedZone();Layout();animations.Observe(frame,Surface.TakeAnimations());
         }
         private bool CanResolveStack(){var offered=Decisions?.CurrentOffer;var value=offered?.Frame;return offered?.CanSubmit==true && value?.StackIds.Count>0 && value.Decision?.IsPriority==true && value.Decision.PlayerId==value.Context.ViewerId && value.PriorityPlayerId==value.Context.ViewerId && value.Actions.Count(a=>a.Kind=="pass" && a.ObjectId==null)==1 && !Decisions.Priority.Current.Paused;}
-        private void RefreshStackControls(){if(resolveAll==null)return;bool running=Decisions?.Priority.Current.Yield=="resolve-stack",yielding=Decisions?.Presentation?.Compact==true;resolveNext.text=yielding?"Cancel passing":"Resolve next";resolveNext.SetEnabled(yielding || CanResolveStack());resolveAll.text=running?"Cancel":"Resolve All";resolveAll.style.display=DisplayStyle.Flex;resolveAll.SetEnabled(running || CanResolveStack());stackToggle.text=stackFocused?"Minimize":"View";}
+        private void RefreshStackControls(){if(resolveAll==null)return;bool automatic=Decisions?.AutomaticPriorityPending==true && !Decisions.Priority.Current.Paused && Decisions.Presentation?.Compact!=true && !Decisions.PriorityControlsOpen && !Decisions.LayoutEditing;resolveNext.style.display=automatic?DisplayStyle.None:DisplayStyle.Flex;bool running=Decisions?.Priority.Current.Yield=="resolve-stack",yielding=Decisions?.Presentation?.Compact==true;resolveNext.text=yielding?"Cancel passing":"Resolve next";resolveNext.SetEnabled(yielding || CanResolveStack());resolveAll.text=running?"Cancel":"Resolve All";resolveAll.style.display=automatic?DisplayStyle.None:DisplayStyle.Flex;resolveAll.SetEnabled(running || CanResolveStack());stackToggle.text=stackFocused?"Minimize":"View";}
         private static string PhaseName(string phase)
         {switch(phase){case "PRECOMBAT_MAIN":return "Main phase";case "POSTCOMBAT_MAIN":return "Second main phase";case "COMBAT":return "Combat";case "BEGINNING":return "Beginning phase";case "ENDING":return "Ending phase";default:return (phase??"Opening hand").Replace('_',' ');}}
         private void UpdateOpponentHand(string player)

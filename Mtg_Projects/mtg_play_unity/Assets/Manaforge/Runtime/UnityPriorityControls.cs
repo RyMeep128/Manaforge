@@ -27,7 +27,7 @@ namespace Manaforge.Play
             temporary.name="unity-priority-temporary";
             temporary.RegisterValueChangedCallback(change=>{panel.Priority.SetTemporaryFullControl(change.newValue,panel.PriorityFrame);Changed();});
             automatic.name="unity-priority-automatic";manual.name="unity-priority-manual";
-            automatic.tooltip="Advance empty priority windows; hold when a response is available or a stop is set.";
+            automatic.tooltip="Advance priority windows and main phases with no available plays. Hold for floating mana in your main phase, meaningful responses, Full Control, or a stop.";
             manual.tooltip="Hold every priority opportunity until Manual control is switched off.";
             automatic.RegisterValueChangedCallback(change=>{panel.Priority.Current.Automatic=change.newValue;Changed();});
             manual.RegisterValueChangedCallback(change=>{panel.Priority.SetTemporaryFullControl(false,panel.PriorityFrame);panel.Priority.Current.Manual=change.newValue;Changed();});

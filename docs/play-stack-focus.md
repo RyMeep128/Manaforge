@@ -1,8 +1,8 @@
 # Stack focus and Resolve All
 
 New public stack objects expand the stack automatically. Expanded cards use the
-full card/ability presentation, a dedicated backdrop and a short presentation hold
-before automatic passing. View/Minimize changes only the local presentation.
+full card/ability presentation and a dedicated backdrop. Stack focus and decorative
+animations do not delay automatic passing. View/Minimize changes only the local presentation.
 Emptying the stack removes the focus panel. Larger stacks retain paging.
 
 Resolve All starts an explicit viewer-local priority yield. It submits the one
@@ -21,6 +21,8 @@ relayouts on stack modifications. These observations informed presentation only.
 No Arena implementation or assets were copied. Resolve All uses Manaforge's
 existing native priority authority, not an inferred Arena rules implementation.
 
-CI covers stack-removal progression, empty-stack stopping, required choices,
+Local Unity validation covers stack-removal progression, empty-stack stopping, required choices,
 new responses, failure, phase stops, manual restoration and focus-panel lifecycle.
-Hosted Unity execution remains dependent on repository licensing.
+Run Unity checks and the Windows player build with `tools/validate_unity_local.ps1`;
+non-Unity checks remain on GitHub Actions. See [priority passing](unity-priority-passing.md)
+for the current fast-flow controls and acceptance requirements.

@@ -127,11 +127,48 @@ namespace Manaforge.Play.Tests
             Assert.That(policy.Evaluate(Frame(wire)),Is.Null,"Missing native Smart Priority facts must not guess");
         }
         [TestCase("PRECOMBAT_MAIN")][TestCase("POSTCOMBAT_MAIN")]
-        public void EmptyOwnMainPhasesRequireExplicitProgressEvenWithNoPlayableCards(string step)
+        public void EmptyOwnMainPhasesAdvanceWithoutAnExplicitYield(string step)
         {
             var wire=Source();OwnStep(wire,step);var policy=new UnityPriorityPolicy();
-            Assert.That(policy.Evaluate(Frame(wire)),Is.Null);
+            Assert.That(policy.Evaluate(Frame(wire)),Is.Not.Null);
+            Assert.That(policy.Current.Yield,Is.Null);
+            ((JArray)wire["body"]["snapshot"]["actions"]).Add(new JObject{["action_id"]="mana",["kind"]="activate",["object_id"]=null,["label"]="Mana",["priority_class"]="basic_mana"});
+            Assert.That(policy.Evaluate(Frame(wire)),Is.Not.Null,"Basic mana tapping alone must not create a stop");
+            policy.Current.Automatic=false;Assert.That(policy.Evaluate(Frame(wire)),Is.Null);
+        }
+        [TestCase("PRECOMBAT_MAIN")][TestCase("POSTCOMBAT_MAIN")]
+        public void OwnMainPhasesHoldForEveryAvailablePlayOrOption(string step)
+        {
+            foreach(string kind in new[]{"play_land","cast_spell","activate"}){
+                var wire=Source();OwnStep(wire,step);
+                ((JArray)wire["body"]["snapshot"]["actions"]).Add(new JObject{["action_id"]="play",["kind"]=kind,["object_id"]=null,["label"]="Play",["priority_class"]="meaningful"});
+                Assert.That(new UnityPriorityPolicy().Evaluate(Frame(wire)),Is.Null,kind);
+            }
+            var option=Source();OwnStep(option,step);
+            option["body"]["snapshot"]["decision"]["options"]=new JArray(new JObject{["option_id"]="choice",["label"]="Choose ability",["object_id"]=null,["player_id"]=null,["selected"]=false});
+            Assert.That(new UnityPriorityPolicy().Evaluate(Frame(option)),Is.Null);
+        }
+        [TestCase("PRECOMBAT_MAIN")][TestCase("POSTCOMBAT_MAIN")]
+        public void OwnMainPhasesHoldFloatingManaAndIncompleteActionsButHonorExplicitYield(string step)
+        {
+            var wire=Source();OwnStep(wire,step);var snapshot=wire["body"]["snapshot"];
+            snapshot["players"][0]["mana"]=new JArray{new JArray{"C",1}};
+            var policy=new UnityPriorityPolicy();Assert.That(policy.Evaluate(Frame(wire)),Is.Null);
+            Assert.That(policy.Current.Reason,Is.EqualTo("Floating mana: continue when ready"));
             policy.BeginYield("response",Frame(wire));Assert.That(policy.Evaluate(Frame(wire)),Is.Not.Null);
+            snapshot["players"][0]["mana"]=new JArray{new JArray{"C",0}};
+            Assert.That(new UnityPriorityPolicy().Evaluate(Frame(wire)),Is.Not.Null);
+            snapshot["actions_complete"]=false;
+            Assert.That(new UnityPriorityPolicy().Evaluate(Frame(wire)),Is.Null);
+        }
+        [TestCase("PRECOMBAT_MAIN")][TestCase("POSTCOMBAT_MAIN")]
+        public void EmptyOwnMainPhasesStillHonorFullControlAndScopedStops(string step)
+        {
+            var wire=Source();OwnStep(wire,step);var frame=Frame(wire);var policy=new UnityPriorityPolicy();policy.Observe(frame);
+            policy.Current.Manual=true;Assert.That(policy.Evaluate(frame),Is.Null);policy.Current.Manual=false;
+            policy.SetTemporaryFullControl(true,frame);Assert.That(policy.Evaluate(frame),Is.Null);policy.SetTemporaryFullControl(false,frame);
+            policy.SetStop("opponent","step",step,true);Assert.That(policy.Evaluate(frame),Is.Not.Null);
+            policy.SetStop("own","step",step,true);Assert.That(policy.Evaluate(frame),Is.Null);
         }
         [Test] public void OwnStackSkipsOrdinaryResponsesButStopsAndFullControlOverrideIt()
         {

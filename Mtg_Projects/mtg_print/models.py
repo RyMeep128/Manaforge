@@ -182,6 +182,7 @@ class ProjectState:
     backside_default_asset_id: str | None = None
     render: RenderSettings = field(default_factory=RenderSettings.default)
     manual_layout: dict | None = None
+    set_print_config: dict | None = None
     deck_document: DeckDocument | None = None
 
     @classmethod
@@ -192,6 +193,7 @@ class ProjectState:
             img_cache=str(data.get("img_cache", "img.cache")),
             cards=_coerce_plain_dict(data.get("cards")),
             manual_layout=deepcopy(data.get("manual_layout")),
+            set_print_config=deepcopy(data.get("set_print_config")),
             card_sort=str(data.get("card_sort", "Alphabetical (A-Z)")),
             backside_enabled=bool(data.get("backside_enabled", False)),
             backside_pages_at_end=bool(data.get("backside_pages_at_end", False)),
@@ -279,6 +281,7 @@ class ProjectState:
             "cards": {e.front_name: 0 if e.front_name.startswith('__') else int(e.count) for e in entries},
             "card_sort": self.card_sort,
             "manual_layout": deepcopy(self.manual_layout),
+            "set_print_config": deepcopy(self.set_print_config),
             "backside_enabled": self.backside_enabled,
             "backside_pages_at_end": self.backside_pages_at_end,
             "backside_separate_file": self.backside_separate_file,
@@ -304,6 +307,7 @@ class ProjectState:
         entries = list(self.card_entries_store.values())
         result = {
             "project_version": 2,
+            "set_print_config": deepcopy(self.set_print_config),
             "card_sort": self.card_sort,
             "manual_layout": deepcopy(self.manual_layout),
             "backside_enabled": self.backside_enabled,
@@ -371,6 +375,7 @@ class ProjectState:
         self.cards = replacement.cards
         self.card_sort = replacement.card_sort
         self.manual_layout = replacement.manual_layout
+        self.set_print_config = replacement.set_print_config
         self.backside_enabled = replacement.backside_enabled
         self.backside_pages_at_end = replacement.backside_pages_at_end
         self.backside_separate_file = replacement.backside_separate_file

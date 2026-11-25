@@ -103,8 +103,58 @@ namespace Manaforge.Play.Tests
             for(int i=0;i<5;i++){host.Tick();panel.Tick();yield return null;}
             Assert.That(peer.PendingCommandBytes,Is.Zero,"Confirmation must not reopen a consumed decision during the snapshot gap");Assert.That(panel.Priority.Current.Paused,Is.False);
             var next=PrioritySnapshot(8);next["body"]["snapshot"]["actions_complete"]=true;peer.ReplyForFixture(next);
-            yield return Until(()=>{host.Tick();panel.Tick();return host.HasPresentedRevision(8) && panel.CanPassPriority;});
+            yield return Until(()=>{host.Tick();panel.Tick();return host.HasPresentedRevision(8) && peer.PendingCommandBytes>0;});
             Assert.That(panel.Priority.Current.Paused,Is.False);Assert.That(panel.CurrentOffer,Is.Not.SameAs(old));
+            var nextRead=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>nextRead.IsCompleted);
+            Assert.That((string)nextRead.Result["body"]["action_id"],Is.EqualTo("pass-8"));
+            for(int i=0;i<5;i++){host.Tick();panel.Tick();yield return null;}
+            Assert.That(peer.PendingCommandBytes,Is.Zero);
+        }
+        [UnityTest] public IEnumerator EmptyMainPhasePassesOnFirstTickWithPassiveControlsAndRestoresARealResponse()
+        {
+            var initial=PrioritySnapshot();initial["body"]["snapshot"]["actions_complete"]=true;
+            var host=Start(initial,out var peer,out var owner);var panel=Panel(host);panel.UseUnifiedPriorityActions(()=>{});
+            yield return Until(()=>{host.Tick();return host.PresentedDecision!=null;});
+            panel.Tick();
+            Assert.That(panel.Priority.Current.Attempted.Contains("priority-7"),Is.True,"The first eligible tick must claim the pass");
+            Assert.That(panel.Root.Q<Button>("priority-actions-primary").style.display.value,Is.EqualTo(DisplayStyle.None));
+            Assert.That(panel.Root.Q<Button>("priority-actions-secondary").style.display.value,Is.EqualTo(DisplayStyle.None));
+            Assert.That(panel.Root.Q<Button>("priority-actions-settings").enabledSelf,Is.True);
+            var read=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>read.IsCompleted);
+            Assert.That((string)read.Result["body"]["action_id"],Is.EqualTo("pass-7"));
+            peer.ReplyForFixture(Ack(read.Result,"confirmed"));yield return Until(()=>host.CurrentDecision==null);
+            var response=PrioritySnapshot(8,true);var snapshot=response["body"]["snapshot"];snapshot["actions_complete"]=true;
+            ((JArray)snapshot["actions"]).Add(new JObject{["action_id"]="respond",["kind"]="cast_spell",["object_id"]=null,["label"]="Cast response",["priority_class"]="meaningful"});
+            peer.ReplyForFixture(response);yield return Until(()=>{host.Tick();panel.Tick();return host.HasPresentedRevision(8);});
+            var primary=panel.Root.Q<Button>("priority-actions-primary");Assert.That(primary.style.display.value,Is.EqualTo(DisplayStyle.Flex));
+            Assert.That(primary.enabledSelf,Is.True);Assert.That(primary.text,Is.EqualTo("Resolve"));
+            for(int i=0;i<5;i++){host.Tick();panel.Tick();yield return null;}
+            Assert.That(peer.PendingCommandBytes,Is.Zero,"The real response must remain available without another automatic command");
+        }
+        [UnityTest] public IEnumerator ArenaStackArrivalAndActiveAnimationDoNotDelayTheFirstAutomaticPass()
+        {
+            var root=node.GetComponent<UIDocument>().rootVisualElement;root.style.width=1280;root.style.height=720;
+            using var table=new ArenaGameplayPresentation(root);
+            var initial=PrioritySnapshot();var snapshot=initial["body"]["snapshot"];snapshot["actions_complete"]=true;
+            var card=JObject.Parse(File.ReadAllText(Path.Combine(Application.dataPath,"../../mtg_play/protocol/fixtures/wire-receive-v1.json")))["positive"][0]["envelope"]["body"]["snapshot"]["objects"][0].DeepClone();
+            card["object_id"]="animation-card";card["zone"]="hand";card["owner_id"]="one";card["controller_id"]="one";card["hidden"]=false;card["face_down"]=false;snapshot["objects"]=new JArray(card);
+            var peer=new ViewerSessionHostTests.Peer(initial.ToString());peers.Add(peer);var owner=new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var host=new ViewerSessionHost(table.Surface,peer.Bootstrap(),owner.Task,true);hosts.Add(host);table.Bind(host);
+            try{
+                yield return Until(()=>{host.Tick();return host.PresentedDecision!=null;});table.Present(host.PresentedDecision.Frame);yield return null;
+                var next=(JObject)initial.DeepClone();next["message_id"]="stack-arrival";var updated=next["body"]["snapshot"];
+                updated["revision"]=8;updated["decision"]["decision_id"]="animated-pass";updated["objects"][0]["zone"]="stack";
+                peer.ReplyForFixture(next);yield return Until(()=>{host.Tick();return host.HasPresentedRevision(8);});
+                table.Present(host.PresentedDecision.Frame);
+                yield return Until(()=>root.Q("gameplay-animation-layer").childCount>0);
+                Assert.That(table.Decisions.PresentationHold,Is.Null,"The normal Arena view must not gate commands on decorative effects");
+                table.Decisions.Tick();
+                Assert.That(table.Decisions.Priority.Current.Attempted.Contains("animated-pass"),Is.True,"Neither stack attention nor an active animation may delay the first eligible tick");
+                var read=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>read.IsCompleted);
+                Assert.That((string)read.Result["body"]["decision_id"],Is.EqualTo("animated-pass"));
+                for(int i=0;i<5;i++){host.Tick();table.Decisions.Tick();yield return null;}
+                Assert.That(peer.PendingCommandBytes,Is.Zero);
+            }finally{host.Dispose();}
         }
         [UnityTest] public IEnumerator WaitingSnapshotsRevokeActionsAndRestoreTheNextPriorityOffer()
         {
