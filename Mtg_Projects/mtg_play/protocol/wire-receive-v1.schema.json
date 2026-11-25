@@ -864,6 +864,16 @@
         },
         "selected": {
           "type": "boolean"
+        },
+        "suggested": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -1289,6 +1299,19 @@
           "anyOf": [
             {
               "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "menu": {
+          "anyOf": [
+            {
+              "enum": [
+                "creature_type",
+                "search"
+              ]
             },
             {
               "type": "null"

@@ -20,8 +20,9 @@ namespace Manaforge.Play
         public CardProjectionContext Context {get;} public string DecisionId {get;}
         public string OptionId {get;} public string Label {get;} public string ObjectId {get;}
         public string PlayerId {get;} public bool Selected {get;}
+        public bool Suggested {get;}
         internal ProjectedChoiceOption(CardProjectionContext context,string decision,JToken source)
-        {Context=context;DecisionId=decision;OptionId=(string)source["option_id"];Label=(string)source["label"];ObjectId=(string)source["object_id"];PlayerId=(string)source["player_id"];Selected=(bool)source["selected"];}
+        {Context=context;DecisionId=decision;OptionId=(string)source["option_id"];Label=(string)source["label"];ObjectId=(string)source["object_id"];PlayerId=(string)source["player_id"];Selected=(bool)source["selected"];Suggested=(bool?)source["suggested"]==true;}
     }
     // Addressable viewer object only; membership never means the engine permits mana production.
     public sealed class ProjectedManaSource
@@ -54,10 +55,12 @@ namespace Manaforge.Play
         public IReadOnlyList<ProjectedChoiceGroup> Groups {get;}
         public string RequestId {get;} public string RequestKind {get;}
         public bool AbilitySelection {get;}
+        public string Menu {get;}
         internal ProjectedDecision(CardProjectionContext context,JToken source)
         {
             if(source["request"] is JObject request){RequestId=(string)request["request_id"];RequestKind=(string)request["kind"];}
             AbilitySelection=(bool?)source["ability_selection"]==true;
+            Menu=(string)source["menu"];
             Groups=Array.AsReadOnly((source["groups"] as JArray ?? new JArray()).Select(group=>new ProjectedChoiceGroup(group)).ToArray());
             Context=context;DecisionId=(string)source["decision_id"];PlayerId=(string)source["player_id"];Family=(string)source["family"];Prompt=(string)source["prompt"];
             Minimum=(long?)source["minimum"];Maximum=(long?)source["maximum"];Cancellable=(bool)source["cancellable"];CanFinish=(bool)source["can_finish"];IsPriority=(bool)source["is_priority"];

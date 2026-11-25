@@ -235,6 +235,10 @@ public final class ManaforgeBridge implements MageClient {
                     choice.addProperty("required", prompt.getChoice().isRequired());
                     choice.add("choices", JSON.toJsonTree(prompt.getChoice().getChoices()));
                     choice.add("key_choices", JSON.toJsonTree(prompt.getChoice().getKeyChoices()));
+                    if (prompt.getChoice() instanceof mage.choices.ChoiceCreatureType) {
+                        choice.addProperty("menu", "creature_type");
+                        choice.add("choice_sort", JSON.toJsonTree(prompt.getChoice().getSortData()));
+                    } else if (prompt.getChoice().isSearchEnabled()) choice.addProperty("menu", "search");
                 }
                 emit("decision", null, choice);
             } else if (method.equals("GAME_CHOOSE_ABILITY")) {

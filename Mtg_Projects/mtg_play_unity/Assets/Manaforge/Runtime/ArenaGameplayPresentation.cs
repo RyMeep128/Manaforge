@@ -122,13 +122,15 @@ namespace Manaforge.Play
         }
         private void PresentAmountPopup()
         {
-            bool amounts=frame?.Decision?.Family=="amounts" && Decisions!=null;
+            bool menu=frame?.Decision?.Menu!=null;
+            bool amounts=(frame?.Decision?.Family=="amounts" || menu) && Decisions!=null;
             if(!amounts){ResetAmountPopup();return;}
             if(amountDecision!=frame.Decision.DecisionId){amountDecision=frame.Decision.DecisionId;amountMinimized=false;ClearCardFocus();CloseInspection();}
             if(Decisions.Root.parent!=amountScroll.contentContainer)amountScroll.Add(Decisions.Root);
-            amountTitle.text=frame.Combat.Count>0 && (frame.Step=="COMBAT_DAMAGE" || frame.Step=="FIRST_COMBAT_DAMAGE")?"Assign combat damage":"Assign amounts";
+            amountTitle.text=menu?OpeningHandFan.PlainPrompt(frame.Decision.Prompt??"Choose one"):frame.Combat.Count>0 && (frame.Step=="COMBAT_DAMAGE" || frame.Step=="FIRST_COMBAT_DAMAGE")?"Assign combat damage":"Assign amounts";
+            reopenAmounts.text=menu?"Continue choosing":"Continue assigning amounts";
             float width=root.resolvedStyle.width,height=root.resolvedStyle.height;
-            amountSurface.style.width=Mathf.Max(280,Mathf.Min(980,width-48));amountSurface.style.maxHeight=Mathf.Max(200,height-64);amountScroll.style.maxHeight=Mathf.Max(140,height-144);
+            amountSurface.style.width=Mathf.Max(280,Mathf.Min(menu?600:980,width-48));amountSurface.style.maxHeight=Mathf.Max(200,height-64);amountScroll.style.maxHeight=Mathf.Max(140,height-144);
             amountOverlay.style.display=amountMinimized?DisplayStyle.None:DisplayStyle.Flex;reopenAmounts.style.display=amountMinimized?DisplayStyle.Flex:DisplayStyle.None;
             if(!amountMinimized)amountOverlay.BringToFront();
         }

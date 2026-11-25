@@ -1015,7 +1015,26 @@ public final class OpeningProjectionChecks {
         boolean found=false;for(JsonElement object:snapshot.getAsJsonArray("objects"))if(object.getAsJsonObject().get("object_id").equals(amount.get("object_id")))found=true;check(found);
         check(snapshot.getAsJsonObject("decision").getAsJsonArray("amounts").get(1).getAsJsonObject().get("object_id").isJsonNull());
     }
+    static void creatureTypeMenuChecks() throws Exception {
+        JsonObject raw=state(),request=prompt();request.addProperty("kind","GAME_CHOOSE_CHOICE");request.addProperty("menu","creature_type");
+        JsonObject keys=new JsonObject(),sort=new JsonObject();
+        for(int i=0;i<300;i++){keys.addProperty("private-type-"+i,"Creature type "+i);sort.addProperty("private-type-"+i,i==299?-100:0);}
+        request.add("key_choices",keys);request.add("choice_sort",sort);
+        ManaforgeOpeningProjection p=projection();JsonObject snapshot=p.projectCoreCombat(raw,request);shape(snapshot);
+        JsonObject decision=snapshot.getAsJsonObject("decision");check("creature_type".equals(decision.get("menu").getAsString()));
+        check(decision.getAsJsonArray("options").size()==300 && !snapshot.toString().contains("private-type-"));
+        check(!decision.getAsJsonArray("options").get(0).getAsJsonObject().get("suggested").getAsBoolean());
+        check(decision.getAsJsonArray("options").get(299).getAsJsonObject().get("suggested").getAsBoolean());
+        JsonObject response=p.claimBoolean(choose(snapshot,298),"session","human","raw-game","raw-human",41,8);
+        check("private-type-298".equals(response.get("value").getAsString()) && NativeCombatChoices.matchesResponse(request,response));
+        fails("STALE_DECISION",()->p.claimBoolean(choose(snapshot,298),"session","human","raw-game","raw-human",41,8));
+        for(int i=300;i<1024;i++)keys.addProperty("private-type-"+i,"Creature type "+i);
+        check(projection().projectCoreCombat(raw,request).getAsJsonObject("decision").getAsJsonArray("options").size()==1024);
+        keys.addProperty("private-type-1024","Creature type 1024");
+        try{projection().projectCoreCombat(raw,request);throw new AssertionError("UNBOUNDED_CREATURE_TYPES");}catch(IOException expected){check(true);}
+    }
     public static void main(String[] args) throws Exception {
+        creatureTypeMenuChecks();
         amountArtworkChecks();presentationIdentityChecks();
         UnityPriorityProjectionChecks.run();
         targetingPresentationChecks();revealObservationChecks();nativeLaunchChecks();triggerOrderingProjectionChecks();publicStackAndOfferedCardChecks();playableExileChecks();automaticPaymentChecks();manualManaChecks();gameplaySessionChecks();combatCaseEvidenceChecks();coreCombatChecks();coreResponseChecks();terminalCombatChecks();coreChoiceChecks();combatCounterChecks();

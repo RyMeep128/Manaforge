@@ -21,6 +21,11 @@ has passed acceptance. Sideboarding and deck construction remain outside this wo
 Updates, redraws, personal information, errors and game-over callbacks are not
 selectable decision families; existing visibility and lifecycle handling still apply.
 
+Creature-type choices now use the [shared searchable menu](play-searchable-choice-menu.md),
+defaulting to offered types from the player's submitted deck. All engine-offered
+types remain reachable through search and **All types**. The linked inventory
+lists Cavern of Souls and the other direct users in the pinned engine.
+
 ## Piles and privacy
 
 Optional `ChoiceRequest.groups` binds each pile to an existing opaque option.

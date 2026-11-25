@@ -29,6 +29,32 @@ namespace Manaforge.Play.Tests
             node=new GameObject("Reusable HUD/drawers");settings=ScriptableObject.CreateInstance<PanelSettings>();settings.themeStyleSheet=Resources.Load<ThemeStyleSheet>("CardTheme");
             var doc=node.AddComponent<UIDocument>();doc.panelSettings=settings;return doc;
         }
+        private static void CaptureChoiceMenu(RenderTexture target,string path)
+        {
+            var previous=RenderTexture.active;var image=new Texture2D(target.width,target.height,TextureFormat.RGBA32,false);
+            try{RenderTexture.active=target;image.ReadPixels(new Rect(0,0,target.width,target.height),0,0);image.Apply();File.WriteAllBytes(path,image.EncodeToPNG());}
+            finally{RenderTexture.active=previous;UnityEngine.Object.Destroy(image);}
+        }
+        [UnityTest] public IEnumerator CreatureTypeMenuUsesCenteredPopupAndRetiresWithItsOffer()
+        {
+            var wire=Fixture("receive-history-v1.json");var snapshot=wire["body"]["snapshot"];snapshot["actions"]=new JArray();var decision=snapshot["decision"];
+            decision["family"]="selection";decision["is_priority"]=false;decision["menu"]="creature_type";decision["prompt"]="Choose a creature type";decision["options"]=new JArray();decision["amounts"]=new JArray();decision["can_finish"]=false;decision["cancellable"]=false;
+            foreach(string type in new[]{"Elf","Human","Time Lord","Zombie"})((JArray)decision["options"]).Add(new JObject{["option_id"]="type-"+type,["label"]=type,["object_id"]=null,["player_id"]=null,["selected"]=false,["suggested"]=type=="Elf" || type=="Human"});
+            var doc=Document(out var node,out var settings);doc.rootVisualElement.style.width=1280;doc.rootVisualElement.style.height=720;using var arena=new ArenaGameplayPresentation(doc.rootVisualElement);using var peer=new ViewerSessionHostTests.Peer(wire.ToString());var owner=new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);using var host=new ViewerSessionHost(arena.Surface,peer.Bootstrap(),owner.Task,true);arena.Bind(host);
+            try{
+                float deadline=Time.realtimeSinceStartup+10;while(host.PresentedDecision==null && Time.realtimeSinceStartup<deadline){host.Tick();yield return null;}Assert.That(host.PresentedDecision,Is.Not.Null);arena.Decisions.Tick();arena.Present(host.PresentedDecision.Frame);yield return null;yield return null;
+                var popup=doc.rootVisualElement.Q("amount-assignment-popup");Assert.That(popup.Contains(arena.Decisions.Root),Is.True);Assert.That(popup.resolvedStyle.width,Is.InRange(400,650));
+                var list=arena.Decisions.Root.Q<ListView>();Assert.That(list.itemsSource.Count,Is.EqualTo(2));Assert.That(peer.PendingCommandBytes,Is.Zero);
+                string output=Path.GetFullPath(Path.Combine(Application.dataPath,"../Artifacts/ChoiceMenu"));Directory.CreateDirectory(output);
+                var target=new RenderTexture(1280,720,24);target.Create();settings.targetTexture=target;
+                yield return null;yield return null;CaptureChoiceMenu(target,Path.Combine(output,"deck-types.png"));
+                arena.Decisions.Root.Q<TextField>().value="Time Lord";yield return null;Assert.That(list.itemsSource.Count,Is.EqualTo(1));Assert.That(peer.PendingCommandBytes,Is.Zero);
+                yield return null;yield return null;CaptureChoiceMenu(target,Path.Combine(output,"search-all-types.png"));settings.targetTexture=null;target.Release();UnityEngine.Object.Destroy(target);
+                var next=(JObject)wire.DeepClone();next["message_id"]="after-types";next["body"]["snapshot"]["revision"]=(long)snapshot["revision"]+1;next["body"]["snapshot"]["decision"]=null;peer.ReplyForFixture(next);
+                deadline=Time.realtimeSinceStartup+10;while(!host.HasPresentedRevision((long)snapshot["revision"]+1) && Time.realtimeSinceStartup<deadline){host.Tick();yield return null;}arena.Decisions.Tick();arena.Present(Frame(next));yield return null;
+                Assert.That(arena.Decisions.Root.Q("searchable-choice-menu"),Is.Null);Assert.That(doc.rootVisualElement.Q("amount-assignment-overlay").style.display.value,Is.EqualTo(DisplayStyle.None));
+            }finally{host.Cancel();UnityEngine.Object.Destroy(node);UnityEngine.Object.Destroy(settings);}yield return null;
+        }
         [UnityTest] public IEnumerator AmountAssignmentUsesWidePopupAndMinimizesWithoutLosingInput()
         {
             var wire=Fixture("receive-history-v1.json");var snapshot=wire["body"]["snapshot"];snapshot["turn"]=2;snapshot["actions"]=new JArray();var decision=snapshot["decision"];decision["family"]="amounts";decision["is_priority"]=false;decision["options"]=new JArray();decision["minimum"]=5;decision["maximum"]=5;decision["can_finish"]=false;decision["cancellable"]=false;decision["amounts"]=new JArray(new JObject{["label"]="Soldier Token, P/T: 2/2",["minimum"]=0,["maximum"]=5,["default"]=2},new JObject{["label"]="Krenko, Tin Street Kingpin, P/T: 3/3",["minimum"]=0,["maximum"]=5,["default"]=3});

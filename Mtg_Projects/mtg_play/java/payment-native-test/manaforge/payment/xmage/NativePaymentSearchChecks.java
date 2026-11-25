@@ -46,7 +46,31 @@ public final class NativePaymentSearchChecks {
         check(illegal.outcome==NativePaymentSearch.Outcome.INSUFFICIENT_MANA,"RESTRICTED_POOL_SPENT_ON_ABILITY");
         check(player.getManaPool().getManaItems().size()==1 && player.getManaPool().getConditionalCount(spell,game,null,spell.getManaCosts())==1,"RESTRICTED_POOL_MUTATED");player.abort();
     }
+    static void creatureTypeMenu() {
+        TwoPlayerDuel game=new TwoPlayerDuel(MultiplayerAttackOption.MULTIPLE,RangeOfInfluence.ALL,new mage.game.mulligan.LondonMulligan(0),60,20,7);
+        game.setGameOptions(new GameOptions());ContextHumanPlayer player=new ContextHumanPlayer("Types",RangeOfInfluence.ALL,0);
+        mage.cards.decks.Deck deck=new mage.cards.decks.Deck();
+        deck.getCards().add(new mage.cards.e.ElvishMystic(player.getId(),info("Elvish Mystic")));
+        deck.getCards().add(new mage.cards.d.DelverOfSecrets(player.getId(),info("Delver of Secrets")));
+        deck.getCards().add(new mage.cards.basiclands.Forest(player.getId(),info("Forest")));
+        game.addPlayer(player,deck);player.useDeck(deck,game);
+        mage.choices.ChoiceCreatureType original=new mage.choices.ChoiceCreatureType(game,null);
+        for(ContextHumanPlayer owner:new ContextHumanPlayer[]{player,player.copy()}) {
+            ContextHumanPlayer.DeckCreatureTypeChoice menu=owner.creatureTypeMenu(original,game);menu.onChooseStart(game,owner.getId());
+            check(menu.getKeyChoices().keySet().equals(original.getKeyChoices().keySet()),"TYPE_MENU_CHANGED_LEGAL_CHOICES");
+            check(menu.getSortData().get("Elf")==-100 && menu.getSortData().get("Druid")==-100,"TYPE_MENU_DID_NOT_READ_FULL_DECK");
+            check(menu.getSortData().get("Insect")==-100,"TYPE_MENU_MISSING_BACK_FACE");
+            check(menu.getSortData().get("Goblin")==0 && !menu.getKeyChoices().containsKey("Forest"),"TYPE_MENU_INCLUDED_OFF_DECK_OR_LAND_TYPE");
+            check(menu.getKeyChoices().get("Elf").equals("Elf"),"TYPE_MENU_INCLUDED_PUBLIC_ZONE_HINTS");
+        }
+        mage.choices.ChoiceCreatureType restricted=new mage.choices.ChoiceCreatureType(game,null,true,"Choose",Arrays.asList(SubType.ZOMBIE,SubType.GOBLIN));
+        ContextHumanPlayer.DeckCreatureTypeChoice menu=player.creatureTypeMenu(restricted,game);menu.onChooseStart(game,player.getId());
+        check(menu.getKeyChoices().size()==2 && !menu.getKeyChoices().containsKey("Elf"),"TYPE_MENU_EXPANDED_RESTRICTED_TYPES");
+        check(menu.getSortData().values().stream().allMatch(value->value==0),"EMPTY_DECK_INTERSECTION_NOT_EMPTY");
+        player.abort();
+    }
     public static void main(String[] args) throws Exception {
+        creatureTypeMenu();
         Thread.currentThread().setName("GAME-payment-oracle");restrictedPool();Random seeds=new Random(20261110L);
         for(int seed=0;seed<16;seed++) {
             TwoPlayerDuel game=new TwoPlayerDuel(MultiplayerAttackOption.MULTIPLE,RangeOfInfluence.ALL,new mage.game.mulligan.LondonMulligan(0),60,20,7);

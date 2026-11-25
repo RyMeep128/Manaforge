@@ -450,6 +450,12 @@
         "python_type": "bool",
         "required": false,
         "python_default": "False"
+      },
+      {
+        "name": "suggested",
+        "python_type": "bool | None",
+        "required": false,
+        "python_default": "None"
       }
     ],
     "AmountConstraint": [
@@ -700,6 +706,12 @@
       {
         "name": "ability_selection",
         "python_type": "bool | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "menu",
+        "python_type": "Literal['creature_type', 'search'] | None",
         "required": false,
         "python_default": "None"
       }

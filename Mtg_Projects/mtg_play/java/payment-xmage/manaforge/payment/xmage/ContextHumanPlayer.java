@@ -39,8 +39,43 @@ public final class ContextHumanPlayer extends RecoveryHumanPlayer {
     private transient long sequence;
     private transient Object ticketOwner=new Object();
     public ContextHumanPlayer(String name,RangeOfInfluence range,int skill){super(name,range,skill);}
-    private ContextHumanPlayer(ContextHumanPlayer original){super(original); /* No borrowed context copied into bookmarks. */}
+    private ContextHumanPlayer(ContextHumanPlayer original){super(original);deckCreatureTypes=original.deckCreatureTypes; /* No borrowed context copied into bookmarks. */}
     @Override public ContextHumanPlayer copy(){return new ContextHumanPlayer(this);}
+    // Printed types of this seat's submitted main deck. Never inspect an opponent's library.
+    private java.util.Set<String> deckCreatureTypes=java.util.Collections.emptySet();
+    private static void collectTypes(mage.cards.Card card,java.util.Set<String> types){
+        card.getSubtype().forEach(type->{if(type.getSubTypeSet()==mage.constants.SubTypeSet.CreatureType)types.add(type.toString());});
+        if(card.getSecondCardFace()!=null)card.getSecondCardFace().getSubtype().forEach(type->{if(type.getSubTypeSet()==mage.constants.SubTypeSet.CreatureType)types.add(type.toString());});
+        if(card instanceof mage.cards.DoubleFacedCard)((mage.cards.DoubleFacedCard)card).getRightHalfCard().getSubtype().forEach(type->{if(type.getSubTypeSet()==mage.constants.SubTypeSet.CreatureType)types.add(type.toString());});
+    }
+    @Override public void useDeck(mage.cards.decks.Deck deck,Game game){
+        super.useDeck(deck,game);java.util.Set<String> types=new java.util.HashSet<>();
+        for(mage.cards.Card card:deck.getMaindeckCards())collectTypes(card,types);
+        deckCreatureTypes=java.util.Collections.unmodifiableSet(types);
+    }
+    static final class DeckCreatureTypeChoice extends mage.choices.ChoiceCreatureType {
+        private static final long serialVersionUID=1L;
+        private final java.util.Set<String> deckTypes;
+        DeckCreatureTypeChoice(mage.choices.ChoiceCreatureType original,java.util.Set<String> types){super(original);deckTypes=java.util.Collections.unmodifiableSet(new java.util.HashSet<>(types));setKeyChoices(new java.util.LinkedHashMap<>(original.getKeyChoices()));}
+        @Override public DeckCreatureTypeChoice copy(){return new DeckCreatureTypeChoice(this,deckTypes);}
+        @Override public void onChooseStart(Game game,UUID player){
+            // The engine's offered keys remain unchanged, including restricted type choices.
+            java.util.Map<String,Integer> order=new java.util.HashMap<>();
+            for(String key:getKeyChoices().keySet()){getKeyChoices().put(key,key);order.put(key,deckTypes.contains(key)?-100:0);}
+            setSortData(order);
+        }
+    }
+    DeckCreatureTypeChoice creatureTypeMenu(mage.choices.ChoiceCreatureType choice,Game game){
+        java.util.Set<String> types=new java.util.HashSet<>(deckCreatureTypes);
+        for(UUID id:game.getCommandersIds(this,mage.constants.CommanderCardType.ANY,false)){mage.cards.Card card=game.getCard(id);if(card!=null)collectTypes(card,types);}
+        return new DeckCreatureTypeChoice(choice,types);
+    }
+    private boolean chooseCreatureType(mage.constants.Outcome outcome,mage.choices.Choice choice,Game game){
+        DeckCreatureTypeChoice menu=creatureTypeMenu((mage.choices.ChoiceCreatureType)choice,game);
+        boolean accepted=super.choose(outcome,menu,game);
+        if(accepted)choice.setChoiceByKey(menu.getChoiceKey(),menu.isChosenSpecial());
+        return accepted;
+    }
     @Override protected boolean playManaHandling(Ability ability,ManaCost unpaid,String message,Game game) {
         if(ticketOwner==null)ticketOwner=new Object();
         Frame previous=payment,current=new Frame(game,ability,unpaid,++sequence);payment=current;
@@ -226,6 +261,7 @@ public final class ContextHumanPlayer extends RecoveryHumanPlayer {
         if(executingSource!=null && outcome==mage.constants.Outcome.PutManaInPool && choice.isManaColorChoice()
             && executionChoice<executingSource.choices.size()
             && PaymentSimulationPlayer.apply(choice,executingSource.choices.get(executionChoice))){executionChoice++;return true;}
+        if(choice instanceof mage.choices.ChoiceCreatureType)return chooseCreatureType(outcome,choice,game);
         return super.choose(outcome,choice,game);
     }
     private static String paymentCostFingerprint(Ability ability,ManaCost unpaid) {

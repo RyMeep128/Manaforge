@@ -93,7 +93,10 @@ def contract_schema():
             definition["required"].remove("groups")
             definition["required"].remove("request")
             definition["required"].remove("ability_selection")
+            definition["required"].remove("menu")
             properties["groups"]["anyOf"][0].update(minItems=2, maxItems=2)
+        if name == "ChoiceOption":
+            definition["required"].remove("suggested")
         if name == "ChoiceGroup":
             properties["cards"]["maxItems"] = 256
         if name == "ChoicePreview":

@@ -111,7 +111,7 @@ namespace Manaforge.Play
         private void Clear(bool preserveStatus=false)
         {
             if(preserveStatus){continuityUntil=Time.unscaledTime+.12f;float height=Root.resolvedStyle.height;if(!float.IsNaN(height) && height>0)Root.style.minHeight=height;}else{continuityUntil=0;Root.style.minHeight=StyleKeyword.Null;}
-            Root.RemoveFromClassList("session-request");Root.RemoveFromClassList("library-ordering");Root.RemoveFromClassList("command-pending");Root.RemoveFromClassList("command-uncertain");Root.RemoveFromClassList("command-confirmed");
+            Root.RemoveFromClassList("session-request");Root.RemoveFromClassList("library-ordering");Root.RemoveFromClassList("searchable-menu");Root.RemoveFromClassList("command-pending");Root.RemoveFromClassList("command-uncertain");Root.RemoveFromClassList("command-confirmed");
             ClearGroupPreviews();selectedGroup=null;built=false;soleAbilityAttempted=false;autoAfter=-1;IsLibraryOrdering=false;manaInput.Refresh(null);offer=null;submitted=null;numericText=null;numericSubmit=null;if(!preserveStatus){StableStatusText.Set(prompt,"",true);manaPool.text="";status.text="";}controls.Clear();pages.Clear();cardChoices=null;if(!preserveStatus)Root.style.display=DisplayStyle.None;
             // Observe a retired task without carrying its result or touching UI from its worker.
             if(pending!=null)pending.ContinueWith(task=>{_=task.Exception;},TaskScheduler.Default);pending=null;
@@ -272,9 +272,16 @@ namespace Manaforge.Play
             var floating=frame.ViewerMana==null?"":string.Join(", ",System.Linq.Enumerable.Select(System.Linq.Enumerable.Where(frame.ViewerMana,pair=>pair.Value>0),pair=>pair.Key+" "+pair.Value));manaPool.text=string.IsNullOrEmpty(floating)?"":"Floating mana: "+floating;manaPool.style.display=string.IsNullOrEmpty(floating)?DisplayStyle.None:DisplayStyle.Flex;StableStatusText.Set(prompt,OpeningHandFan.PlainPrompt(frame.Decision.Prompt??"Choose an action"),!frame.Decision.IsPriority);Root.style.display=DisplayStyle.Flex;controls.Clear();pages.Clear();numericSubmit=null;cardChoices=null;
             if(!string.IsNullOrEmpty(frame.PaymentReason)){status.text="Manual payment required: "+frame.PaymentReason.Replace('_',' ').ToLowerInvariant()+".";UnityEngine.Debug.Log("Manaforge payment fallback: "+frame.PaymentReason);}
             Root.EnableInClassList("session-request",frame.Decision.RequestId!=null);
+            Root.EnableInClassList("searchable-menu",frame.Decision.Menu!=null);
+            status.style.minHeight=frame.Decision.Menu!=null?0:18;
             IsLibraryOrdering=LibraryOrdering(prompt.text);
             Root.EnableInClassList("library-ordering",IsLibraryOrdering);
             if(frame.Decision.Groups.Count>0){BuildGroups(captured,frame);controls.SetEnabled(captured.CanSubmit && pending==null);return;}
+            if(frame.Decision.Menu!=null){
+                controls.Add(new SearchableChoiceMenu(frame.Decision,option=>Send(captured,()=>host.ChooseAsync(captured,option))).Root);
+                if(frame.Decision.Cancellable)controls.Add(Button("decision-cancel","Cancel choice",()=>Send(captured,()=>host.CancelChoiceAsync(captured))));
+                controls.SetEnabled(captured.CanSubmit && pending==null);return;
+            }
             int total=frame.Actions.Count+frame.Decision.Options.Count;int start=0,end=total;
             for(int i=start;i<end;i++) {
                 if(i<frame.Actions.Count){var action=frame.Actions[i];AddChoice(Button("decision-action-"+i,action.Label,()=>Send(captured,()=>host.PerformAsync(captured,action))),action.ObjectId!=null);AddTurnPass(captured,action);}

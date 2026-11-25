@@ -137,6 +137,7 @@ class ChoiceOption(Serializable):
     object_id: str | None = None
     player_id: str | None = None
     selected: bool = False
+    suggested: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -211,6 +212,7 @@ class ChoiceRequest(Serializable):
     groups: tuple[ChoiceGroup, ...] | None = None
     request: SessionRequest | None = None
     ability_selection: bool | None = None
+    menu: Literal["creature_type", "search"] | None = None
 
 
 @dataclass(frozen=True)

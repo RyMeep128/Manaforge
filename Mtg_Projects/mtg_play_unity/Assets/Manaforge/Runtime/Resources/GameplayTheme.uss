@@ -240,3 +240,18 @@
 #amount-assignment-popup { border-width: 1px; border-top-width: 3px; border-color: rgb(109,126,139); border-top-color: rgb(239,150,75); border-radius: 8px; }
 
 .amount-recipient-artwork { height: 210px; min-height: 210px; align-items: center; justify-content: center; margin-bottom: 8px; flex-shrink: 0; }
+
+/* Shared named-choice picker, including creature types. */
+#amount-assignment-popup .searchable-menu { border-width: 0; padding: 0; background-color: rgba(0,0,0,0); }
+#amount-assignment-popup .searchable-menu #decision-prompt { display: none; }
+.choice-menu { flex-grow: 1; min-width: 220px; padding: 12px; background-color: rgb(17,21,27); border-width: 1px; border-color: rgb(119,105,83); }
+#choice-menu-tabs Button { flex-grow: 1; height: 34px; margin: 0 4px 8px 0; color: rgb(220,215,204); background-color: rgb(32,36,43); border-width: 1px; border-color: rgb(87,83,75); }
+#choice-menu-tabs .choice-menu-tab-selected { border-color: rgb(231,166,88); color: rgb(255,220,162); background-color: rgb(60,46,31); }
+#choice-menu-search { flex-direction: column; margin-bottom: 10px; color: rgb(230,225,214); }
+#choice-menu-search .unity-text-field__input { min-height: 34px; font-size: 18px; color: rgb(247,244,235); background-color: rgb(9,12,17); border-width: 1px; border-color: rgb(119,105,83); padding: 6px 10px; }
+.choice-menu-row { height: 36px; padding: 7px 12px; font-size: 18px; color: rgb(235,229,215); }
+#choice-menu-list .unity-collection-view__item:hover { background-color: rgb(54,61,69); }
+#choice-menu-list .unity-collection-view__item--selected { background-color: rgb(75,60,38); border-width: 1px; border-color: rgb(239,179,102); }
+#choice-menu-empty { white-space: normal; padding: 16px 8px; color: rgb(200,196,185); }
+#choice-menu-selection { margin: 12px 0; font-size: 18px; color: rgb(255,218,159); }
+#choice-menu-confirm { height: 42px; font-size: 19px; }
